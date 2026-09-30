@@ -159,11 +159,11 @@ select:disabled{opacity:.6}
 .fs legend{font-size:.78rem;font-weight:800;color:var(--accent-strong);padding:0 6px}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:5px;border-radius:14px;background:var(--soft)}
 .seg button{border:0;background:transparent;padding:10px;border-radius:10px;cursor:pointer;font-weight:800;color:var(--muted)}
-.seg button.on[data-type=in]{background:var(--surface);color:var(--in);box-shadow:var(--shadow)}
-.seg button.on[data-type=out]{background:var(--surface);color:var(--out);box-shadow:var(--shadow)}
+.seg button.on[data-type=in],.seg button.on[data-etype=in]{background:var(--surface);color:var(--in);box-shadow:var(--shadow)}
+.seg button.on[data-type=out],.seg button.on[data-etype=out]{background:var(--surface);color:var(--out);box-shadow:var(--shadow)}
 .amount-in{font-family:var(--f-num);font-size:1.15rem;font-weight:600}
-#tx-form[data-type=in] .step{background:var(--in)}
-#tx-form[data-type=out] .step{background:var(--out)}
+#tx-form[data-type=in] .step,#edit-tx[data-type=in] .step{background:var(--in)}
+#tx-form[data-type=out] .step,#edit-tx[data-type=out] .step{background:var(--out)}
 
 /* ---------- daftar transaksi ---------- */
 .recent{display:grid}

@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Aturan keamanan Kas Aceh Mandiri Utama (v2).
+// Aturan keamanan Kas Aceh Mandiri Utama (v2.2).
 // Email owner di isOwner() harus sama dengan OWNER_EMAIL di firebase-config.js.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -42,6 +42,18 @@ service cloud.firestore {
         && d.createdBy == request.auth.uid;
     }
 
+    // Edit owner: bentuk data tetap sah, pencatat asli tidak boleh berubah
+    function validEdit(d) {
+      return d.keys().hasAll(['branchId', 'type', 'amount', 'date', 'no', 'desc', 'category', 'createdBy', 'createdAt'])
+        && d.type in ['in', 'out']
+        && d.amount is number && d.amount > 0 && d.amount < 100000000000000
+        && d.date is string && d.date.size() == 10
+        && d.desc is string && d.desc.size() > 0 && d.desc.size() <= 500
+        && d.category is string
+        && d.createdBy == resource.data.createdBy
+        && d.createdAt == resource.data.createdAt;
+    }
+
     // Login kasir: dibuat dan diubah hanya oleh owner; kasir hanya membaca profilnya sendiri
     match /users/{uid} {
       allow read: if isOwner() || (signedIn() && request.auth.uid == uid);
@@ -58,7 +70,9 @@ service cloud.firestore {
     match /tx/{tid} {
       allow read: if isOwner() || isStaffOf(resource.data.branchId);
       allow create: if (isOwner() || isStaffOf(request.resource.data.branchId)) && validTx(request.resource.data);
-      allow update, delete: if isOwner();
+      // Edit & hapus hanya owner, termasuk transaksi yang dicatat kasir
+      allow update: if isOwner() && validEdit(request.resource.data);
+      allow delete: if isOwner();
     }
 
     // Pengaturan: 'app' (logo) terbuka untuk halaman masuk; 'categories' untuk pengguna yang sudah masuk.

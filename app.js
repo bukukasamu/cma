@@ -10,7 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { firebaseConfig, OWNER_EMAIL } from "./firebase-config.js";
 
-export const APP_VERSION = "2.1.0";
+export const APP_VERSION = "2.2.0";
 const COMPANY = "ACEH MANDIRI UTAMA";
 // Login kasir memakai username; di Firebase disimpan sebagai username@domain ini.
 const USER_DOMAIN = "kasir.cashflow-amu.firebaseapp.com";
@@ -590,11 +590,11 @@ function ledgerHtml(bid){
   const body = rows.length ? rows.map(({t,bal})=>`<tr>
       <td class="num">${esc(fmtShort(t.date))}</td>
       <td class="num hint">${esc(t.no||"")}</td>
-      <td class="desc"><b>${esc(t.desc||"-")}</b><small>${esc(t.category||"")}${t.party?` · ${t.type==="in"?"dari":"kepada"} ${esc(t.party)}`:""}${t.by==="owner"?" · dicatat owner":""}</small></td>
+      <td class="desc"><b>${esc(t.desc||"-")}</b><small>${esc(t.category||"")}${t.party?` · ${t.type==="in"?"dari":"kepada"} ${esc(t.party)}`:""}${t.by==="owner"?" · dicatat owner":""}${t.editedAt?" · diedit owner":""}</small></td>
       <td class="r num t-in">${t.type==="in"?rpn(t.amount):""}</td>
       <td class="r num t-out">${t.type==="out"?rpn(t.amount):""}</td>
       <td class="r num">${rpn(bal)}</td>
-      <td><div class="acts"><button class="btn ghost sm" data-kw="${esc(t.id)}">Kwitansi</button>${owner?`<button class="btn ghost sm danger" data-del="${esc(t.id)}">Hapus</button>`:""}</div></td>
+      <td><div class="acts"><button class="btn ghost sm" data-kw="${esc(t.id)}">Kwitansi</button>${owner?`<button class="btn ghost sm" data-edit="${esc(t.id)}">Edit</button><button class="btn ghost sm danger" data-del="${esc(t.id)}">Hapus</button>`:""}</div></td>
     </tr>`).join("") : `<tr><td colspan="7" style="text-align:center;padding:26px" class="muted">Belum ada transaksi di bulan ini.</td></tr>`;
   return `<div class="ledger-wrap"><table>
     <thead><tr><th>Tgl</th><th>No.</th><th>Uraian</th><th class="r">Masuk</th><th class="r">Keluar</th><th class="r">Saldo</th><th></th></tr></thead>
@@ -860,8 +860,11 @@ function openKwitansi(t){
         <div class="kw-sign"><span class="place">${esc(placeOf(b))}, ${esc(fmtDMY(t.date))}</span>
           <span>${L.left}<div class="line">&nbsp;</div></span><span>${L.right}<div class="line">${t.type==="out"?esc(t.party||" "):"&nbsp;"}</div></span></div></div>
     </div>
+    ${t.editedAt?`<p class="hint">Diedit owner ${esc(fmtTime(t.editedAt))}.</p>`:""}
+    ${S.role==="owner"?`<p class="hint">Owner dapat mengedit atau menghapus transaksi ini, termasuk yang dicatat kasir.</p>`:""}
     <p class="err" id="kw-err" hidden></p>
     <div class="modal-acts">
+      ${S.role==="owner"?`<button class="btn danger" data-del="${esc(t.id)}">Hapus</button><button class="btn" data-edit="${esc(t.id)}">Edit</button>`:""}
       <button class="btn" data-close>Tutup</button>
       <button class="btn primary" id="kw-pdf">Unduh PDF kwitansi</button>
     </div>`);
@@ -917,6 +920,87 @@ async function downloadPdf(){
     logAct("Unduh kwitansi",t.no,t.branchId);
   }catch(e){ showErr("#kw-err","PDF gagal dibuat: "+errText(e)); }
   finally{ btn.disabled=false; btn.textContent="Unduh PDF kwitansi"; }
+}
+
+/* ================= edit transaksi (owner) ================= */
+function openEdit(t){
+  if(S.role!=="owner") return;
+  S.editTx=t; S.editType=t.type;
+  const branches=S.branches.filter(b=>b.active!==false || b.id===t.branchId);
+  openModal(`<div class="modal-head"><h2>Edit transaksi</h2><button class="btn ghost sm" data-close>Tutup</button></div>
+    <p class="hint">No. <span class="num">${esc(t.no||"")}</span> · dicatat ${t.by==="owner"?"owner":"kasir"}${t.createdAt?" "+esc(fmtTime(t.createdAt)):""}${t.editedAt?" · terakhir diedit "+esc(fmtTime(t.editedAt)):""}</p>
+    <form id="edit-tx" novalidate>
+      <div class="seg" role="group" aria-label="Jenis transaksi">
+        <button type="button" data-etype="in">↓ Uang masuk</button><button type="button" data-etype="out">↑ Uang keluar</button>
+      </div>
+      <label for="e-branch">Cabang<select id="e-branch">${branches.map(b=>`<option value="${esc(b.id)}" ${b.id===t.branchId?"selected":""}>${esc(b.name)}</option>`).join("")}</select></label>
+      <label for="e-cat"><span><b class="step">1</b> Kategori</span><select id="e-cat"></select></label>
+      <label for="e-amount"><span><b class="step">2</b> Nominal (Rp)</span><input id="e-amount" class="amount-in" inputmode="numeric" autocomplete="off" value="${rpn(t.amount)}"></label>
+      <label for="e-desc"><span><b class="step">3</b> Keterangan / catatan</span><textarea id="e-desc" rows="2" maxlength="500">${esc(t.desc||"")}</textarea></label>
+      <div class="row2">
+        <label for="e-date">Tanggal<input type="date" id="e-date" value="${esc(t.date)}"></label>
+        <label for="e-party"><span id="e-party-lbl">Pihak</span><input id="e-party" value="${esc(t.party||"")}" placeholder="Opsional"></label>
+      </div>
+      <p class="hint" id="e-no-hint" hidden>Nomor bukti akan dibuat ulang karena jenis, cabang, atau bulan berubah.</p>
+      <p class="err" id="e-err" hidden></p>
+      <div class="modal-acts"><button class="btn" type="button" data-kw="${esc(t.id)}">Batal</button><button class="btn primary" type="submit" id="e-submit">Simpan perubahan</button></div>
+    </form>`);
+  paintEditType();
+  ["#e-branch","#e-date"].forEach(sel=>$(sel).addEventListener("change",noHint));
+}
+function paintEditType(){
+  const t=S.editTx; if(!t) return; const type=S.editType;
+  document.querySelectorAll("[data-etype]").forEach(b=>b.classList.toggle("on",b.dataset.etype===type));
+  const f=$("#edit-tx"); if(f) f.dataset.type=type;
+  const lbl=$("#e-party-lbl"); if(lbl) lbl.textContent = type==="in"?"Diterima dari":"Dibayar kepada";
+  const sel=$("#e-cat"); if(sel){
+    const list=[...(S.cats[type]||[])];
+    if(type===t.type && t.category && !list.includes(t.category)) list.unshift(t.category);
+    const v = sel.value || (type===t.type ? t.category : "");
+    sel.innerHTML=`<option value="">Pilih kategori…</option>`+list.map(c=>`<option value="${esc(c)}">${esc(c)}${type===t.type&&c===t.category&&!(S.cats[type]||[]).includes(c)?" (sudah dihapus dari daftar)":""}</option>`).join("");
+    if(list.includes(v)) sel.value=v;
+  }
+  noHint();
+}
+function noHint(){
+  const t=S.editTx, h=$("#e-no-hint"); if(!t||!h) return;
+  const bid=$("#e-branch")?.value, date=$("#e-date")?.value||"";
+  h.hidden = !(S.editType!==t.type || bid!==t.branchId || date.slice(0,7)!==String(t.date).slice(0,7));
+}
+async function saveEdit(f){
+  const t=S.editTx; if(!t) return;
+  const type=S.editType, bid=$("#e-branch").value, b=branchById(bid);
+  const category=$("#e-cat").value, amount=+digits($("#e-amount").value), desc=$("#e-desc").value.trim();
+  const date=$("#e-date").value, party=$("#e-party").value.trim();
+  if(!b){ showErr("#e-err","Pilih cabang."); return; }
+  if(!category){ showErr("#e-err","Pilih kategori."); return; }
+  if(!amount){ showErr("#e-err","Isi nominal."); return; }
+  if(!desc){ showErr("#e-err","Isi keterangan transaksi."); return; }
+  if(!date){ showErr("#e-err","Isi tanggal."); return; }
+  showErr("#e-err","");
+  let no=t.no;
+  if(type!==t.type || bid!==t.branchId || date.slice(0,7)!==String(t.date).slice(0,7)){
+    const seq=S.tx.filter(x=>x.id!==t.id && x.branchId===bid && x.type===type && String(x.date).slice(0,7)===date.slice(0,7)).length+1;
+    no=`${type==="in"?"KM":"KK"}/${b.code||"CBG"}/${date.slice(0,7).replace("-","")}/${String(seq).padStart(3,"0")}`;
+  }
+  const upd={type,branchId:bid,category,amount,desc,date,party,no,editedAt:Date.now(),editedBy:S.user.uid};
+  const ch=[];
+  if(t.type!==type) ch.push(`jenis ${t.type==="in"?"masuk":"keluar"} → ${type==="in"?"masuk":"keluar"}`);
+  if(t.branchId!==bid) ch.push(`cabang ${branchById(t.branchId)?.name||"-"} → ${b.name}`);
+  if((t.category||"")!==category) ch.push(`kategori ${t.category||"-"} → ${category}`);
+  if(+t.amount!==amount) ch.push(`nominal ${rp(t.amount)} → ${rp(amount)}`);
+  if((t.desc||"")!==desc) ch.push(`keterangan "${t.desc||""}" → "${desc}"`);
+  if(t.date!==date) ch.push(`tanggal ${fmtDMY(t.date)} → ${fmtDMY(date)}`);
+  if((t.party||"")!==party) ch.push(`pihak "${t.party||""}" → "${party}"`);
+  if(no!==t.no) ch.push(`no. ${t.no} → ${no}`);
+  if(!ch.length){ showErr("#e-err","Belum ada yang diubah."); return; }
+  const btn=$("#e-submit"); btn.disabled=true; btn.textContent="Menyimpan…";
+  try{
+    await updateDoc(doc(db,"tx",t.id),upd);
+    logAct("Edit transaksi",`${t.no}: ${ch.join("; ")}`.slice(0,900),bid);
+    toast("Transaksi diperbarui");
+    openKwitansi({...t,...upd});
+  }catch(err){ showErr("#e-err",errText(err)); btn.disabled=false; btn.textContent="Simpan perubahan"; }
 }
 
 /* ================= ekspor laporan (Excel & PDF) ================= */
@@ -1069,10 +1153,12 @@ document.addEventListener("click", async e=>{
     try{ await setDoc(doc(db,"settings","app"),{logo:null,updatedAt:Date.now()},{merge:true}); toast("Kembali ke logo bawaan"); logAct("Ganti logo","Kembali ke logo bawaan",null); }catch(err){ toast(errText(err)); }
     return;
   }
+  if(d.edit){ const t=S.tx.find(x=>x.id===d.edit); if(t) openEdit(t); return; }
+  if(d.etype){ S.editType=d.etype; paintEditType(); return; }
   if(d.del){
     if(!arm(el,"del"+d.del,"Yakin hapus?")) return;
     const t=S.tx.find(x=>x.id===d.del);
-    try{ await deleteDoc(doc(db,"tx",d.del)); toast("Transaksi dihapus"); if(t) logAct("Hapus transaksi",`${t.no} · ${t.category||""} · ${rp(t.amount)}`,t.branchId); }
+    try{ await deleteDoc(doc(db,"tx",d.del)); if(el.closest("#modal-root")) closeModal(); toast("Transaksi dihapus"); if(t) logAct("Hapus transaksi",`${t.no} · ${t.category||""} · ${rp(t.amount)} · ${t.desc||""}${t.by==="cabang"?" (dicatat kasir)":""}`,t.branchId); }
     catch(err){ toast(errText(err)); }
     return;
   }
@@ -1102,6 +1188,7 @@ document.addEventListener("submit", async e=>{
   if(f.id==="branch-form") return addBranch(e);
   if(f.id==="tx-form") return saveTx(e);
   if(f.id==="pw-form") return changePw(e);
+  if(f.id==="edit-tx"){ e.preventDefault(); if(S.role==="owner") return saveEdit(f); return; }
   if(f.dataset.staffsave){ e.preventDefault(); return addStaff(f); }
   if(f.dataset.editsave){ e.preventDefault(); if(S.role==="owner") return saveBranchEdit(f); return; }
   if(f.dataset.cattype){
@@ -1113,7 +1200,7 @@ document.addEventListener("submit", async e=>{
   }
 });
 document.addEventListener("input", e=>{
-  if(e.target.id==="f-amount"){ const v=digits(e.target.value); e.target.value = v ? (+v).toLocaleString("id-ID") : ""; }
+  if(e.target.id==="f-amount"||e.target.id==="e-amount"){ const v=digits(e.target.value); e.target.value = v ? (+v).toLocaleString("id-ID") : ""; }
 });
 document.addEventListener("change", e=>{
   if(e.target.id==="month" && e.target.value){ S.month=e.target.value; fill(); }

@@ -1,4 +1,4 @@
-# Kas Aceh Mandiri Utama · v2.1.0
+# Kas Aceh Mandiri Utama · v2.2.0
 
 Buku kas multi-cabang untuk Aceh Mandiri Utama. Situs statis di GitHub Pages, data dan login di Firebase (Authentication + Firestore). Cukup dengan paket gratis Firebase (Spark). Bisa dipasang di HP sebagai aplikasi (PWA).
 
@@ -10,7 +10,7 @@ Buku kas multi-cabang untuk Aceh Mandiri Utama. Situs statis di GitHub Pages, da
 | Tambah cabang + buat login kasir | Ya | Tidak |
 | Kelola kategori (tambah/hapus) | Ya | Hanya memilih |
 | Catat uang masuk/keluar | Semua cabang | Cabangnya sendiri |
-| Hapus transaksi | Ya | Tidak |
+| Edit & hapus transaksi (termasuk yang dicatat kasir) | Ya | Tidak |
 | Kwitansi PDF | Ya | Ya |
 | Edit nama/alamat cabang | Ya | Tidak |
 | Unduh laporan Excel & PDF | Rekap semua cabang + per cabang | Cabangnya sendiri |
@@ -59,6 +59,13 @@ Batasan ini dijaga oleh `firestore.rules` di server Firebase, termasuk: kasir ha
 - Pilih bulan, lalu tekan **Excel** atau **PDF** di kanan atas.
 - Di Ringkasan (owner): satu file berisi rekap semua cabang ditambah buku kas tiap cabang (Excel: satu sheet per cabang).
 - Di buku kas cabang: laporan cabang itu saja, lengkap dengan saldo awal, saldo berjalan, jumlah, dan kolom tanda tangan.
+
+## Edit & hapus transaksi (owner)
+Ketuk transaksi mana pun (di Ringkasan, daftar rincian, atau buku kas cabang) → muncul kwitansi dengan tombol **Edit** dan **Hapus**.
+- **Hapus:** ketuk *Hapus*, lalu ketuk *Yakin hapus?* dalam 3 detik.
+- **Edit:** ubah jenis, cabang, kategori, nominal, keterangan, tanggal, atau pihak. Jika jenis, cabang, atau bulan berubah, nomor bukti dibuat ulang.
+- Setiap edit dan hapus tercatat di **Aktivitas**, lengkap dengan nilai lama → baru.
+- Kasir tidak bisa mengedit atau menghapus, termasuk transaksi yang ia catat sendiri (dijaga `firestore.rules`).
 
 ## Alamat cabang & kwitansi
 Menu **Cabang → Edit** untuk mengubah nama, alamat, dan kota/kabupaten. Kota/kabupaten dipakai di kwitansi dan laporan, misalnya `Pantonlabu, 01-10-2026`.
