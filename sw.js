@@ -1,6 +1,6 @@
 // Service worker Kas AMU: menyimpan tampilan aplikasi agar cepat dibuka dan bisa dipasang.
 // Data kas tetap diambil langsung dari Firebase. Naikkan VERSION setiap kali merilis versi baru.
-const VERSION = "kas-amu-2.0.0";
+const VERSION = "kas-amu-2.1.0";
 const SHELL = [
   "./", "./index.html", "./app.js", "./style.css", "./firebase-config.js", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png", "./icons/apple-touch-icon.png"

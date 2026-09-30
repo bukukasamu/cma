@@ -10,7 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { firebaseConfig, OWNER_EMAIL } from "./firebase-config.js";
 
-export const APP_VERSION = "2.0.0";
+export const APP_VERSION = "2.1.0";
 const COMPANY = "ACEH MANDIRI UTAMA";
 // Login kasir memakai username; di Firebase disimpan sebagai username@domain ini.
 const USER_DOMAIN = "kasir.cashflow-amu.firebaseapp.com";
@@ -38,6 +38,18 @@ const fmtMonth = m => { try { return new Intl.DateTimeFormat("id-ID",{month:"lon
 const fmtTime = ms => { try { return new Intl.DateTimeFormat("id-ID",{timeZone:"Asia/Jakarta",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(ms)); } catch(e){ return ""; } };
 const prevMonth = m => { const [y,mo]=m.split("-").map(Number); const d=new Date(y,mo-2,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
 const daysIn = m => { const [y,mo]=m.split("-").map(Number); return new Date(y,mo,0).getDate(); };
+const fmtDMY = d => String(d||"").split("-").reverse().join("-");
+const XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+const AUTOTABLE_URL = "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js";
+const _scripts = {};
+function loadScript(src){
+  if(!_scripts[src]) _scripts[src] = new Promise((res,rej)=>{
+    const el=document.createElement("script"); el.src=src; el.async=true;
+    el.onload=()=>res(); el.onerror=()=>{ delete _scripts[src]; el.remove(); rej(new Error("Pustaka ekspor gagal dimuat. Periksa koneksi internet lalu coba lagi.")); };
+    document.head.appendChild(el);
+  });
+  return _scripts[src];
+}
 const newId = () => doc(collection(db,"tx")).id;
 const digits = s => String(s||"").replace(/\D/g,"");
 const isOwnerEmail = email => !!email && email.toLowerCase() === OWNER_EMAIL.toLowerCase();
@@ -286,6 +298,9 @@ function renderTop(){
 }
 
 /* ================= views ================= */
+function exportButtons(scope){
+  return `<div class="exp" role="group" aria-label="Unduh laporan"><span class="exp-l">Unduh</span><button class="btn sm" data-export="xlsx" data-scope="${scope}">Excel</button><button class="btn sm" data-export="pdf" data-scope="${scope}">PDF</button></div>`;
+}
 function monthPicker(){ return `<label class="month" for="month">Bulan <input type="month" id="month" value="${S.month}"></label>`; }
 
 function txForm(withBranch){
@@ -339,7 +354,7 @@ function renderView(){
   if(!allReady()){ appEl.innerHTML=`<div class="loading"><span class="spinner"></span>Memuat buku kas…</div>`; return; }
 
   if(S.role==="owner" && S.view==="dash"){
-    appEl.innerHTML = `<div class="sec-head"><div><p class="eyebrow">Semua cabang</p><h1>Ringkasan kas</h1></div>${monthPicker()}</div>
+    appEl.innerHTML = `<div class="sec-head"><div><p class="eyebrow">Semua cabang</p><h1>Ringkasan kas</h1></div><div class="head-tools">${monthPicker()}${exportButtons("all")}</div></div>
       <div id="stats" class="stats"></div>
       <div id="insights" class="insights"></div>
       <div class="sec-head"><h2>Cabang</h2><button class="btn sm" data-go="kelola">Kelola cabang</button></div>
@@ -355,7 +370,8 @@ function renderView(){
         <div class="panel"><h2>Tambah cabang</h2>
           <form id="branch-form" novalidate>
             <label for="b-name">Nama cabang<input id="b-name" placeholder="mis. Banda Aceh"></label>
-            <label for="b-city">Kota / alamat singkat<input id="b-city" placeholder="mis. Jl. T. Nyak Arief, Banda Aceh"></label>
+            <label for="b-addr">Alamat<input id="b-addr" placeholder="mis. Jl. Medan–Banda Aceh No. 12"></label>
+            <label for="b-kota">Kota / kabupaten (dipakai di kwitansi)<input id="b-kota" placeholder="mis. Pantonlabu"></label>
             <fieldset class="fs"><legend>Login kasir cabang</legend>
               <label for="b-staff">Nama kasir<input id="b-staff" placeholder="mis. Rahmat"></label>
               <label for="b-user">Username<input id="b-user" autocapitalize="none" spellcheck="false" placeholder="mis. kasir.bandaaceh"></label>
@@ -409,12 +425,12 @@ function renderView(){
     const ownerDetail = S.role==="owner";
     appEl.innerHTML = `<div class="sec-head"><div style="display:grid;gap:4px">
         ${ownerDetail?`<button class="link" data-go="dash" style="justify-self:start">← Semua cabang</button>`:""}
-        <p class="eyebrow">Buku kas cabang</p><h1 id="hdr-branch"></h1></div>${monthPicker()}</div>
+        <p class="eyebrow">Buku kas cabang</p><h1 id="hdr-branch"></h1></div><div class="head-tools">${monthPicker()}${exportButtons("branch")}</div></div>
       <div id="stats" class="stats"></div>
       <div id="insights" class="insights"></div>
       <div class="split">
         <div class="panel"><h2>Catat transaksi</h2>${txForm(false)}</div>
-        <div class="panel"><div class="panel-head"><h2>Buku kas <span class="muted" id="ledger-month" style="font-weight:500"></span></h2><button class="btn sm" id="csv">Unduh CSV</button></div><div id="ledger"></div></div>
+        <div class="panel"><div class="panel-head"><h2>Buku kas <span class="muted" id="ledger-month" style="font-weight:500"></span></h2><span class="hint">Unduh laporan lewat tombol Excel / PDF di atas</span></div><div id="ledger"></div></div>
       </div>`;
   }
   setType(S.formType);
@@ -557,13 +573,15 @@ function txRow(t, showBranch){
     <span class="a ${t.type==="in"?"t-in":"t-out"}">${t.type==="in"?"+":"−"}${rpn(t.amount)}</span></button>`;
 }
 
-function ledgerRows(bid){
+function ledgerRows(bid){ return ledgerData(bid,S.month); }
+function ledgerData(bid, month){
   const all=txOf(bid).sort(sortTx);
-  const start=S.month+"-01";
+  const start=month+"-01";
   let open=0; for(const t of all){ if(t.date<start) open += t.type==="in"?+t.amount:-t.amount; }
   let bal=open;
-  const rows=all.filter(t=>String(t.date).startsWith(S.month)).map(t=>{ bal += t.type==="in"?+t.amount:-t.amount; return {t,bal}; });
-  return {open,rows,close:bal};
+  let totIn=0, totOut=0;
+  const rows=all.filter(t=>String(t.date).startsWith(month)).map(t=>{ const a=+t.amount||0; if(t.type==="in"){ bal+=a; totIn+=a; } else { bal-=a; totOut+=a; } return {t,bal}; });
+  return {open,rows,close:bal,totIn,totOut};
 }
 function ledgerHtml(bid){
   if(!bid) return "";
@@ -590,14 +608,22 @@ function manageHtml(){
     const s=sums(txOf(b.id)); const cnt=txOf(b.id).length;
     const staff=S.users.filter(u=>u.branchId===b.id);
     return `<div class="mi">
-      <div class="mi-top"><div><strong>${esc(b.name)}</strong> <span class="num hint">${esc(b.code||"")}</span><div class="hint">${esc(b.city||"")}</div></div>
+      <div class="mi-top"><div><strong>${esc(b.name)}</strong> <span class="num hint">${esc(b.code||"")}</span><div class="hint">${esc(addrLine(b))}</div></div>
         <div class="num">${sgnRp(s.saldo)} <span class="hint">· ${cnt} transaksi</span></div></div>
       <div class="mi-inline">
         <button class="btn sm" data-open="${esc(b.id)}">Buka buku kas</button>
+        <button class="btn sm" data-editform="${esc(b.id)}">Edit</button>
         <button class="btn sm" data-toggle="${esc(b.id)}">${b.active===false?"Aktifkan":"Nonaktifkan"}</button>
         ${cnt===0&&staff.length===0?`<button class="btn sm danger" data-delbranch="${esc(b.id)}">Hapus</button>`:""}
         ${b.active===false?`<span class="pill off">Nonaktif · kasir tidak bisa masuk</span>`:""}
       </div>
+      <form class="edit-form" data-editsave="${esc(b.id)}" hidden novalidate>
+        <label>Nama cabang<input name="name" value="${esc(b.name)}"></label>
+        <label>Alamat<input name="address" value="${esc(b.address||(!b.kota?b.city||"":""))}"></label>
+        <label>Kota / kabupaten (dipakai di kwitansi)<input name="kota" value="${esc(b.kota||"")}" placeholder="mis. Pantonlabu"></label>
+        <p class="err" data-editerr hidden></p>
+        <div class="mi-inline"><button class="btn sm primary" type="submit">Simpan perubahan</button><button class="btn sm ghost" type="button" data-editform="${esc(b.id)}">Batal</button></div>
+      </form>
       <div class="staff">
         <div class="hint" style="font-weight:700">Login kasir</div>
         ${staff.length? staff.map(u=>`<div class="staff-row"><span><b>${esc(u.name)}</b> <span class="hint num">${esc(displayLogin(u.email))}</span>${u.active===false?` <span class="pill off">Nonaktif</span>`:""}</span>
@@ -682,7 +708,7 @@ async function createStaffLogin(branchId, name, login, pw){
 
 async function addBranch(e){
   e.preventDefault();
-  const name=$("#b-name").value.trim(), city=$("#b-city").value.trim();
+  const name=$("#b-name").value.trim(), address=$("#b-addr").value.trim(), kota=$("#b-kota").value.trim();
   const staff=$("#b-staff").value.trim(), login=$("#b-user").value.trim().toLowerCase(), pw=$("#b-pw").value;
   if(!name){ showErr("#b-err","Isi nama cabang."); return; }
   if(S.branches.some(b=>b.name.toLowerCase()===name.toLowerCase())){ showErr("#b-err","Nama cabang ini sudah ada."); return; }
@@ -694,13 +720,14 @@ async function addBranch(e){
   const btn=$("#b-submit"); btn.disabled=true; btn.textContent="Menyimpan…";
   const ref=doc(collection(db,"branches"));
   try{
-    await setDoc(ref,{name,city,code:makeCode(name),active:true,createdAt:Date.now()});
-    logAct("Tambah cabang",name+(city?" · "+city:""),ref.id);
+    if(!kota){ throw Object.assign(new Error("Isi kota / kabupaten cabang (dipakai di kwitansi)."),{code:""}); }
+    await setDoc(ref,{name,address,kota,city:kota,code:makeCode(name),active:true,createdAt:Date.now()});
+    logAct("Tambah cabang",name+" · "+[address,kota].filter(Boolean).join(", "),ref.id);
   }catch(err){ showErr("#b-err",errText(err)); btn.disabled=false; btn.textContent="Tambah cabang dan login"; return; }
   try{
     if(login){ await createStaffLogin(ref.id, staff||("Kasir "+name), login, pw); toast(`Cabang ${name} dan login ${displayLogin(toLoginEmail(login))} dibuat`); }
     else toast(`Cabang ${name} ditambahkan. Tambahkan login kasirnya di daftar.`);
-    ["#b-name","#b-city","#b-staff","#b-user","#b-pw"].forEach(s=>{ const el=$(s); if(el) el.value=""; });
+    ["#b-name","#b-addr","#b-kota","#b-staff","#b-user","#b-pw"].forEach(s=>{ const el=$(s); if(el) el.value=""; });
   }catch(err){ showErr("#b-err","Cabang dibuat, tetapi login kasir gagal: "+errText(err)+" Tambahkan login lewat daftar cabang."); }
   finally{ btn.disabled=false; btn.textContent="Tambah cabang dan login"; }
 }
@@ -813,14 +840,15 @@ function openDrill(spec,title){
 const kwLabels = t => t.type==="in"
   ? {title:"Kwitansi Penerimaan",party:"Telah terima dari",left:"Penyetor",right:"Kasir"}
   : {title:"Kwitansi Pengeluaran",party:"Dibayarkan kepada",left:"Kasir",right:"Penerima"};
-const placeOf = b => (b.city||b.name||"").split(",").pop().trim();
+const placeOf = b => (b.kota || String(b.city||"").split(",").pop().trim() || b.name || "").trim();
+function addrLine(b){ if(!b) return ""; if(b.kota||b.address) return [b.address,b.kota].filter(Boolean).join(", "); return b.city||""; }
 
 function openKwitansi(t){
   const b=branchById(t.branchId)||{name:"-",city:""};
   const L=kwLabels(t);
   openModal(`
     <div class="kw">
-      <div class="kw-top"><div class="kw-co"><span data-logo="kw-logo">${logoHtml("kw-logo")}</span><div><strong>${COMPANY}</strong><span>Cabang ${esc(b.name)}${b.city?" · "+esc(b.city):""}</span></div></div>
+      <div class="kw-top"><div class="kw-co"><span data-logo="kw-logo">${logoHtml("kw-logo")}</span><div><strong>${COMPANY}</strong><span>Cabang ${esc(b.name)}${addrLine(b)?" · "+esc(addrLine(b)):""}</span></div></div>
         <div class="kw-title">${L.title}<span>No. ${esc(t.no)}</span></div></div>
       <dl>
         <dt>${L.party}</dt><dd>${esc(t.party||"-")}</dd>
@@ -829,7 +857,7 @@ function openKwitansi(t){
         ${t.category?`<dt>Kategori</dt><dd>${esc(t.category)}</dd>`:""}
       </dl>
       <div class="kw-foot"><div class="kw-amt">${rp(t.amount)}</div>
-        <div class="kw-sign"><span class="place">${esc(placeOf(b))}, ${esc(fmtDate(t.date))}</span>
+        <div class="kw-sign"><span class="place">${esc(placeOf(b))}, ${esc(fmtDMY(t.date))}</span>
           <span>${L.left}<div class="line">&nbsp;</div></span><span>${L.right}<div class="line">${t.type==="out"?esc(t.party||" "):"&nbsp;"}</div></span></div></div>
     </div>
     <p class="err" id="kw-err" hidden></p>
@@ -859,7 +887,7 @@ async function downloadPdf(){
     }
     pdf.setFont("helvetica","bold"); pdf.setFontSize(14); pdf.setTextColor(20); pdf.text(COMPANY,hx,19);
     pdf.setFont("helvetica","normal"); pdf.setFontSize(9);
-    pdf.text(pdf.splitTextToSize("Cabang "+b.name+(b.city?" - "+b.city:""),120-hx),hx,24.5);
+    pdf.text(pdf.splitTextToSize("Cabang "+b.name+(addrLine(b)?" - "+addrLine(b):""),120-hx).slice(0,2),hx,24.5);
     pdf.setFont("helvetica","bold"); pdf.setFontSize(12); pdf.text(L.title.toUpperCase(),196,19,{align:"right"});
     pdf.setFont("courier","normal"); pdf.setFontSize(9.5); pdf.text("No. "+t.no,196,24.5,{align:"right"});
     pdf.setLineWidth(0.3); pdf.line(14,30,196,30);
@@ -867,7 +895,7 @@ async function downloadPdf(){
     const row=(label,val,opts={})=>{
       pdf.setFont("helvetica","normal"); pdf.setFontSize(10); pdf.setTextColor(90); pdf.text(label,14,y); pdf.text(":",56,y);
       pdf.setTextColor(20); pdf.setFont("helvetica",opts.italic?"italic":"normal");
-      const lines=pdf.splitTextToSize(val||"-",134);
+      const lines=pdf.splitTextToSize(val||"-",134).slice(0,opts.max||3);
       if(opts.fill){ pdf.setFillColor(228,246,239); pdf.rect(59,y-4.6,137,lines.length*5+2.6,"F"); }
       pdf.text(lines,61,y); y+=Math.max(9,lines.length*5+4);
     };
@@ -875,13 +903,15 @@ async function downloadPdf(){
     row("Uang sejumlah",terbilang(t.amount),{italic:true,fill:true});
     row("Untuk pembayaran",t.desc);
     if(t.category) row("Kategori",t.category);
-    pdf.setLineWidth(0.6); pdf.rect(14,106,72,14);
-    pdf.setFont("courier","bold"); pdf.setFontSize(14); pdf.setTextColor(20); pdf.text(rp(t.amount),18,115.5);
+    pdf.setLineWidth(0.6); pdf.rect(14,106,70,14);
+    pdf.setFont("courier","bold"); pdf.setFontSize(13); pdf.setTextColor(20); pdf.text(rp(t.amount),18,115.5);
     pdf.setFont("helvetica","normal"); pdf.setFontSize(9); pdf.setTextColor(60);
-    pdf.text(placeOf(b)+", "+fmtDate(t.date),196,103,{align:"right"});
-    pdf.text(L.left,128,109,{align:"center"}); pdf.text(L.right,172,109,{align:"center"});
-    pdf.setLineWidth(0.3); pdf.line(108,128,148,128); pdf.line(152,128,192,128);
-    if(t.type==="out" && t.party) pdf.text(pdf.splitTextToSize(t.party,40)[0],172,132.5,{align:"center"});
+    // Tanda tangan: dua kolom berjarak lebar, ruang tanda tangan ±20 mm
+    const xL=110, xR=170;
+    pdf.text(placeOf(b)+", "+fmtDMY(t.date),xR,101,{align:"center"});
+    pdf.text(L.left+",",xL,107,{align:"center"}); pdf.text(L.right+",",xR,107,{align:"center"});
+    pdf.setLineWidth(0.3); pdf.line(xL-21,128,xL+21,128); pdf.line(xR-21,128,xR+21,128);
+    if(t.type==="out" && t.party) pdf.text(pdf.splitTextToSize(t.party,40)[0],xR,132.5,{align:"center"});
     pdf.setFontSize(7); pdf.setTextColor(130); pdf.text("Dicatat di Kas Aceh Mandiri Utama",14,136);
     pdf.save(t.no.replace(/\//g,"-")+".pdf");
     logAct("Unduh kwitansi",t.no,t.branchId);
@@ -889,15 +919,124 @@ async function downloadPdf(){
   finally{ btn.disabled=false; btn.textContent="Unduh PDF kwitansi"; }
 }
 
-function exportCsv(){
-  const bid=currentBranchId(); const b=branchById(bid); if(!b) return;
-  const {open,rows,close}=ledgerRows(bid);
-  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
-  const lines=[["Tanggal","No","Jenis","Kategori","Keterangan","Pihak","Masuk","Keluar","Saldo"].join(",")];
-  lines.push(["","","","","Saldo awal bulan","","","",open].map(q).join(","));
-  for(const {t,bal} of rows) lines.push([t.date,t.no,t.type==="in"?"Masuk":"Keluar",t.category,t.desc,t.party,t.type==="in"?t.amount:"",t.type==="out"?t.amount:"",bal].map(q).join(","));
-  lines.push(["","","","","Saldo akhir bulan","","","",close].map(q).join(","));
-  downloadBlob(`kas-${b.code||"cabang"}-${S.month}.csv`, new Blob(["﻿"+lines.join("\n")],{type:"text/csv"}));
+/* ================= ekspor laporan (Excel & PDF) ================= */
+function exportTargets(scope){
+  if(scope==="branch"){ const b=branchById(currentBranchId()); return b?[b]:[]; }
+  return S.role==="owner" ? S.branches.slice() : [];
+}
+const sheetName = (name, used) => { let n=String(name).replace(/[\\/?*\[\]:]/g,"").slice(0,31)||"Cabang"; let k=n, i=2; while(used.has(k)){ k=(n.slice(0,28)+" "+i); i++; } used.add(k); return k; };
+
+async function exportExcel(scope){
+  const list=exportTargets(scope); if(!list.length){ toast("Belum ada cabang untuk dilaporkan."); return; }
+  await loadScript(XLSX_URL);
+  const X=window.XLSX, m=S.month, wb=X.utils.book_new(), used=new Set();
+  const mkSheet=(aoa,widths)=>{ const ws=X.utils.aoa_to_sheet(aoa); ws["!cols"]=widths.map(w=>({wch:w}));
+    for(const k of Object.keys(ws)){ if(k[0]!=="!" && ws[k].t==="n") ws[k].z="#,##0"; } return ws; };
+  if(list.length>1){
+    const rows=list.map(b=>{ const d=ledgerData(b.id,m); return [b.name, placeOf(b), d.open, d.totIn, d.totOut, d.close, d.rows.length]; });
+    const tot=rows.reduce((a,r)=>a.map((v,i)=>i>=2?v+r[i]:v),["Total","",0,0,0,0,0]);
+    X.utils.book_append_sheet(wb, mkSheet([[COMPANY],["Rekap kas semua cabang"],["Periode: "+fmtMonth(m)],[],
+      ["Cabang","Kota / kabupaten","Saldo awal (Rp)","Masuk (Rp)","Keluar (Rp)","Saldo akhir (Rp)","Jumlah transaksi"], ...rows, tot],
+      [22,20,16,16,16,16,16]), sheetName("Rekap",used));
+  }
+  for(const b of list){
+    const d=ledgerData(b.id,m);
+    const aoa=[[COMPANY],["Buku kas cabang "+b.name],[addrLine(b)],["Periode: "+fmtMonth(m)],[],
+      ["Tanggal","No. bukti","Kategori","Keterangan","Pihak","Masuk (Rp)","Keluar (Rp)","Saldo (Rp)"],
+      ["","","","Saldo awal bulan","","","",d.open],
+      ...d.rows.map(({t,bal})=>[fmtDMY(t.date),t.no||"",t.category||"",t.desc||"",t.party||"",t.type==="in"?+t.amount:"",t.type==="out"?+t.amount:"",bal]),
+      ["","","","Jumlah / saldo akhir","",d.totIn,d.totOut,d.close]];
+    X.utils.book_append_sheet(wb, mkSheet(aoa,[12,20,18,42,20,14,14,16]), sheetName(b.name,used));
+  }
+  const fname = list.length>1 ? `Rekap-Kas-AMU-${m}.xlsx` : `Kas-${list[0].code||"cabang"}-${m}.xlsx`;
+  X.writeFile(wb, fname);
+  logAct("Unduh laporan Excel", `${list.length>1?"Semua cabang":list[0].name} · ${fmtMonth(m)}`, list.length>1?null:list[0].id);
+}
+
+async function exportPdfReport(scope){
+  const list=exportTargets(scope); if(!list.length){ toast("Belum ada cabang untuk dilaporkan."); return; }
+  if(!window.jspdf) throw new Error("Pembuat PDF belum termuat. Periksa koneksi lalu muat ulang halaman.");
+  await loadScript(AUTOTABLE_URL);
+  const m=S.month, pdf=new window.jspdf.jsPDF({unit:"mm",format:"a4"});
+  const W=210, today=todayJkt();
+  const table=opts=>{ if(typeof pdf.autoTable==="function") pdf.autoTable(opts); else if(window.jspdf_autotable) (window.jspdf_autotable.autoTable||window.jspdf_autotable.default)(pdf,opts); else throw new Error("Pustaka tabel PDF tidak tersedia."); };
+  const header=(title,sub)=>{
+    let hx=14;
+    if(S.logo && S.logo.dataUrl){ try{ let lh=13, lw=lh*(S.logo.w||1)/(S.logo.h||1); if(lw>30){ lw=30; lh=lw*(S.logo.h||1)/(S.logo.w||1); }
+      pdf.addImage(S.logo.dataUrl,S.logo.mime==="image/jpeg"?"JPEG":"PNG",14,10+(13-lh)/2,lw,lh); hx=14+lw+4; }catch(e){} }
+    pdf.setTextColor(20); pdf.setFont("helvetica","bold"); pdf.setFontSize(13); pdf.text(COMPANY,hx,15);
+    pdf.setFont("helvetica","normal"); pdf.setFontSize(9.5); pdf.setTextColor(70); pdf.text(sub,hx,20.5);
+    pdf.setFont("helvetica","bold"); pdf.setFontSize(12); pdf.setTextColor(20); pdf.text(title,W-14,15,{align:"right"});
+    pdf.setFont("helvetica","normal"); pdf.setFontSize(9.5); pdf.setTextColor(70); pdf.text("Periode: "+fmtMonth(m),W-14,20.5,{align:"right"});
+    pdf.setDrawColor(14,164,125); pdf.setLineWidth(0.6); pdf.line(14,26,W-14,26);
+    return 32;
+  };
+  const base={theme:"grid",styles:{fontSize:8.5,cellPadding:2,lineColor:[212,234,225],lineWidth:0.1,textColor:[20,40,35]},
+    headStyles:{fillColor:[14,164,125],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[246,252,249]},margin:{left:14,right:14,bottom:18}};
+  const mark=d=>{ if(d.section==="body" && d.row.raw && d.row.raw._carry){ d.cell.styles.fontStyle="bold"; d.cell.styles.fillColor=[228,245,238]; } };
+  const signBlock=(b)=>{
+    let y=(pdf.lastAutoTable?pdf.lastAutoTable.finalY:40)+12;
+    if(y>297-55){ pdf.addPage(); y=24; }
+    pdf.setFont("helvetica","normal"); pdf.setFontSize(9.5); pdf.setTextColor(40);
+    const xL=55, xR=155;
+    pdf.text(placeOf(b)+", "+fmtDMY(today),xR,y,{align:"center"});
+    pdf.text("Dibuat oleh,",xL,y+6,{align:"center"}); pdf.text("Mengetahui,",xR,y+6,{align:"center"});
+    pdf.setDrawColor(80); pdf.setLineWidth(0.3); pdf.line(xL-25,y+30,xL+25,y+30); pdf.line(xR-25,y+30,xR+25,y+30);
+    pdf.setFontSize(8.5); pdf.setTextColor(90); pdf.text("Kasir cabang",xL,y+35,{align:"center"}); pdf.text("Owner",xR,y+35,{align:"center"});
+  };
+  const ledgerSection=b=>{
+    const d=ledgerData(b.id,m);
+    const startY=header("Buku Kas Cabang "+b.name, addrLine(b)||("Cabang "+b.name));
+    pdf.setFontSize(9); pdf.setTextColor(40);
+    pdf.text(`Saldo awal ${rp(d.open)}   ·   Masuk ${rp(d.totIn)}   ·   Keluar ${rp(d.totOut)}   ·   Saldo akhir ${rp(d.close)}`,14,startY);
+    const open=["","","","Saldo awal bulan","","",rpn(d.open)]; open._carry=true;
+    const close=["","","","Jumlah / saldo akhir",rpn(d.totIn),rpn(d.totOut),rpn(d.close)]; close._carry=true;
+    const body=[open,...d.rows.map(({t,bal})=>[fmtDMY(t.date),t.no||"",t.category||"",(t.desc||"")+(t.party?` (${t.type==="in"?"dari":"kepada"} ${t.party})`:""),t.type==="in"?rpn(t.amount):"",t.type==="out"?rpn(t.amount):"",rpn(bal)]),close];
+    table({...base,startY:startY+4,head:[["Tanggal","No. bukti","Kategori","Keterangan","Masuk","Keluar","Saldo"]],body,
+      columnStyles:{0:{cellWidth:19},1:{cellWidth:34,fontSize:7.8},2:{cellWidth:23},4:{halign:"right",cellWidth:21},5:{halign:"right",cellWidth:21},6:{halign:"right",cellWidth:23}},
+      didParseCell:d2=>{ mark(d2); if(d2.section==="body"){ if(d2.column.index===4) d2.cell.styles.textColor=[15,140,80]; if(d2.column.index===5) d2.cell.styles.textColor=[210,70,50]; } }});
+    signBlock(b);
+  };
+  if(list.length>1){
+    const startY=header("Rekap Kas Semua Cabang","Laporan gabungan "+list.length+" cabang");
+    let t0=0,t1=0,t2=0,t3=0,tn=0;
+    const body=list.map(b=>{ const d=ledgerData(b.id,m); t0+=d.open; t1+=d.totIn; t2+=d.totOut; t3+=d.close; tn+=d.rows.length;
+      return [b.name,placeOf(b),rpn(d.open),rpn(d.totIn),rpn(d.totOut),rpn(d.close),String(d.rows.length)]; });
+    const tot=["Total","",rpn(t0),rpn(t1),rpn(t2),rpn(t3),String(tn)]; tot._carry=true;
+    table({...base,startY,head:[["Cabang","Kota / kab.","Saldo awal","Masuk","Keluar","Saldo akhir","Trx"]],body:[...body,tot],
+      columnStyles:{2:{halign:"right"},3:{halign:"right"},4:{halign:"right"},5:{halign:"right"},6:{halign:"right",cellWidth:12}},didParseCell:mark});
+    for(const b of list){ pdf.addPage(); ledgerSection(b); }
+  } else ledgerSection(list[0]);
+  const n=pdf.getNumberOfPages();
+  for(let i=1;i<=n;i++){ pdf.setPage(i); pdf.setFont("helvetica","normal"); pdf.setFontSize(7.5); pdf.setTextColor(130);
+    pdf.text("Dicetak "+fmtDMY(today)+" · Kas Aceh Mandiri Utama",14,290); pdf.text("Halaman "+i+" dari "+n,W-14,290,{align:"right"}); }
+  const fname = list.length>1 ? `Rekap-Kas-AMU-${m}.pdf` : `Kas-${list[0].code||"cabang"}-${m}.pdf`;
+  pdf.save(fname);
+  logAct("Unduh laporan PDF", `${list.length>1?"Semua cabang":list[0].name} · ${fmtMonth(m)}`, list.length>1?null:list[0].id);
+}
+
+async function runExport(btn){
+  const kind=btn.dataset.export, scope=btn.dataset.scope;
+  const old=btn.textContent; btn.disabled=true; btn.textContent="Menyiapkan…";
+  try{ if(kind==="xlsx") await exportExcel(scope); else await exportPdfReport(scope); }
+  catch(err){ toast(errText(err)); }
+  finally{ btn.disabled=false; btn.textContent=old; }
+}
+
+async function saveBranchEdit(form){
+  const b=branchById(form.dataset.editsave); if(!b) return;
+  const err=form.querySelector("[data-editerr]"); const show=m=>{ err.textContent=m||""; err.hidden=!m; };
+  const name=form.name.value.trim(), address=form.address.value.trim(), kota=form.kota.value.trim();
+  if(!name){ show("Nama cabang tidak boleh kosong."); return; }
+  if(!kota){ show("Isi kota / kabupaten (dipakai di kwitansi)."); return; }
+  if(S.branches.some(x=>x.id!==b.id && x.name.toLowerCase()===name.toLowerCase())){ show("Nama cabang ini sudah dipakai cabang lain."); return; }
+  show("");
+  try{
+    await updateDoc(doc(db,"branches",b.id),{name,address,kota,city:kota,updatedAt:Date.now()});
+    const changes=[]; if(b.name!==name) changes.push(`nama "${b.name}" → "${name}"`); if((b.address||"")!==address) changes.push("alamat"); if((b.kota||"")!==kota) changes.push(`kota/kab. → ${kota}`);
+    logAct("Edit cabang", changes.join(", ")||"Tanpa perubahan", b.id);
+    toast("Data cabang disimpan"); form.hidden=true;
+  }catch(e){ show(errText(e)); }
 }
 
 const armed=new Map();
@@ -924,7 +1063,7 @@ document.addEventListener("click", async e=>{
   if(d.kw){ const t=S.tx.find(x=>x.id===d.kw); if(t) openKwitansi(t); return; }
   if(el.id==="kw-pdf") return downloadPdf();
   if(d.close!==undefined) return closeModal();
-  if(el.id==="csv") return exportCsv();
+  if(d.export) return runExport(el);
   if(S.role!=="owner") return;
   if(el.id==="logo-reset"){
     try{ await setDoc(doc(db,"settings","app"),{logo:null,updatedAt:Date.now()},{merge:true}); toast("Kembali ke logo bawaan"); logAct("Ganti logo","Kembali ke logo bawaan",null); }catch(err){ toast(errText(err)); }
@@ -943,6 +1082,7 @@ document.addEventListener("click", async e=>{
     if(!arm(el,"db"+d.delbranch,"Yakin hapus cabang?")) return;
     const b=branchById(d.delbranch);
     try{ await deleteDoc(doc(db,"branches",d.delbranch)); toast("Cabang dihapus"); logAct("Hapus cabang",b?b.name:"",null); }catch(err){ toast(errText(err)); } return; }
+  if(d.editform){ const f=document.querySelector(`[data-editsave="${CSS.escape(d.editform)}"]`); if(f){ f.hidden=!f.hidden; if(!f.hidden) f.name.focus(); } return; }
   if(d.staffform){ const f=document.querySelector(`[data-staffsave="${CSS.escape(d.staffform)}"]`); if(f){ f.hidden=!f.hidden; if(!f.hidden) f.name.focus(); } return; }
   if(d.staff){ const u=S.users.find(x=>x.id===d.staff); if(!u) return;
     try{ await updateDoc(doc(db,"users",u.id),{active:u.active===false}); toast(u.active===false?"Login kasir diaktifkan":"Login kasir dinonaktifkan"); logAct(u.active===false?"Aktifkan login kasir":"Nonaktifkan login kasir",`${u.name} (${displayLogin(u.email)})`,u.branchId); }catch(err){ toast(errText(err)); } return; }
@@ -963,6 +1103,7 @@ document.addEventListener("submit", async e=>{
   if(f.id==="tx-form") return saveTx(e);
   if(f.id==="pw-form") return changePw(e);
   if(f.dataset.staffsave){ e.preventDefault(); return addStaff(f); }
+  if(f.dataset.editsave){ e.preventDefault(); if(S.role==="owner") return saveBranchEdit(f); return; }
   if(f.dataset.cattype){
     e.preventDefault();
     const type=f.dataset.cattype, name=f.cat.value.trim().replace(/\s+/g," ");

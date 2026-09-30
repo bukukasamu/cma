@@ -1,4 +1,4 @@
-# Kas Aceh Mandiri Utama · v2.0.0
+# Kas Aceh Mandiri Utama · v2.1.0
 
 Buku kas multi-cabang untuk Aceh Mandiri Utama. Situs statis di GitHub Pages, data dan login di Firebase (Authentication + Firestore). Cukup dengan paket gratis Firebase (Spark). Bisa dipasang di HP sebagai aplikasi (PWA).
 
@@ -12,6 +12,8 @@ Buku kas multi-cabang untuk Aceh Mandiri Utama. Situs statis di GitHub Pages, da
 | Catat uang masuk/keluar | Semua cabang | Cabangnya sendiri |
 | Hapus transaksi | Ya | Tidak |
 | Kwitansi PDF | Ya | Ya |
+| Edit nama/alamat cabang | Ya | Tidak |
+| Unduh laporan Excel & PDF | Rekap semua cabang + per cabang | Cabangnya sendiri |
 | Ubah password sendiri | Ya | Ya |
 | Log aktivitas | Melihat semua | Tercatat otomatis |
 
@@ -50,8 +52,16 @@ Batasan ini dijaga oleh `firestore.rules` di server Firebase, termasuk: kasir ha
 - Ingin file **APK** untuk Play Store/pemasangan langsung? Masukkan alamat GitHub Pages Anda di https://www.pwabuilder.com → **Package for stores → Android**.
 
 ### Merilis versi baru
-1. Naikkan `APP_VERSION` di `app.js` dan `VERSION` di `sw.js` (misalnya ke 2.0.1).
+1. Naikkan `APP_VERSION` di `app.js` dan `VERSION` di `sw.js` (misalnya ke 2.1.1).
 2. Unggah ke GitHub. Pengguna yang sedang membuka aplikasi akan melihat tombol **Versi baru tersedia**.
+
+## Laporan Excel & PDF
+- Pilih bulan, lalu tekan **Excel** atau **PDF** di kanan atas.
+- Di Ringkasan (owner): satu file berisi rekap semua cabang ditambah buku kas tiap cabang (Excel: satu sheet per cabang).
+- Di buku kas cabang: laporan cabang itu saja, lengkap dengan saldo awal, saldo berjalan, jumlah, dan kolom tanda tangan.
+
+## Alamat cabang & kwitansi
+Menu **Cabang → Edit** untuk mengubah nama, alamat, dan kota/kabupaten. Kota/kabupaten dipakai di kwitansi dan laporan, misalnya `Pantonlabu, 01-10-2026`.
 
 ## Mengganti logo
 Owner → **Pengaturan** → pilih gambar. Logo tampil di halaman masuk, bilah atas, dan kwitansi PDF. (Ikon aplikasi di layar HP memakai file di folder `icons/`; ganti file tersebut jika ingin ikonnya ikut berubah.)
