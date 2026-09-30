@@ -4,26 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Kas Aceh Mandiri Utama</title>
-<meta name="description" content="Buku kas multi-cabang CV/PT Aceh Mandiri Utama">
+<meta name="description" content="Buku kas multi-cabang Aceh Mandiri Utama">
+<meta name="theme-color" content="#0ea47d" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a1714" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Kas AMU">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" id="favicon" type="image/png" href="icons/icon-192.png" data-default="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
 :root{color-scheme:light}
-html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-body{margin:0}
 img{max-width:100%}
 [hidden]{display:none!important}
 </style>
-<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d6653'/%3E%3Ctext x='32' y='40' font-family='Arial' font-weight='700' font-size='20' text-anchor='middle' fill='white'%3EAMU%3C/text%3E%3C/svg%3E" data-default="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d6653'/%3E%3Ctext x='32' y='40' font-family='Arial' font-weight='700' font-size='20' text-anchor='middle' fill='white'%3EAMU%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="topbar" hidden><div class="topbar-in" id="topbar">
-  <div class="brand"><span class="brand-logo logo-default">AMU</span><span>Kas Aceh Mandiri Utama</span></div>
-</div></header>
-<main id="app"><div class="loading">Memuat buku kas…</div></main>
+<header class="topbar" hidden><div class="topbar-in" id="topbar"></div></header>
+<main id="app"><div class="loading"><span class="spinner"></span>Memuat buku kas…</div></main>
 <div id="modal-root"></div>
-<div id="toast" class="toast" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<button id="update" class="update" hidden>Versi baru tersedia · ketuk untuk memperbarui</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module" src="app.js"></script>

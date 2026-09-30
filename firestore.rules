@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Aturan keamanan Buku Kas Aceh Mandiri Utama.
+// Aturan keamanan Kas Aceh Mandiri Utama (v2).
 // Email owner di isOwner() harus sama dengan OWNER_EMAIL di firebase-config.js.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -27,16 +27,22 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/branches/$(bid)).data.active != false;
     }
 
+    // Daftar kategori yang ditetapkan owner, per jenis ('in' / 'out')
+    function catList(t) {
+      return get(/databases/$(database)/documents/settings/categories).data[t];
+    }
+
     function validTx(d) {
-      return d.keys().hasAll(['branchId', 'type', 'amount', 'date', 'no', 'desc', 'createdBy', 'createdAt'])
+      return d.keys().hasAll(['branchId', 'type', 'amount', 'date', 'no', 'desc', 'category', 'createdBy', 'createdAt'])
         && d.type in ['in', 'out']
         && d.amount is number && d.amount > 0 && d.amount < 100000000000000
         && d.date is string && d.date.size() == 10
         && d.desc is string && d.desc.size() > 0 && d.desc.size() <= 500
+        && d.category is string && d.category in catList(d.type)
         && d.createdBy == request.auth.uid;
     }
 
-    // Akun kasir: dibuat dan diubah hanya oleh owner; kasir hanya membaca profilnya sendiri
+    // Login kasir: dibuat dan diubah hanya oleh owner; kasir hanya membaca profilnya sendiri
     match /users/{uid} {
       allow read: if isOwner() || (signedIn() && request.auth.uid == uid);
       allow write: if isOwner();
@@ -55,19 +61,23 @@ service cloud.firestore {
       allow update, delete: if isOwner();
     }
 
-    // Lampiran kwitansi (foto/PDF yang dikecilkan), satu dokumen per transaksi
-    match /att/{tid} {
-      allow read: if isOwner() || isStaffOf(resource.data.branchId);
-      allow create: if (isOwner() || isStaffOf(request.resource.data.branchId))
-        && request.resource.data.dataUrl is string
-        && request.resource.data.dataUrl.size() < 900000;
-      allow delete: if isOwner();
+    // Pengaturan: 'app' (logo) terbuka untuk halaman masuk; 'categories' untuk pengguna yang sudah masuk.
+    // Hanya owner yang mengubah.
+    match /settings/{sid} {
+      allow read: if sid == 'app' || signedIn();
+      allow write: if isOwner() && sid in ['app', 'categories'];
     }
 
-    // Pengaturan tampilan (logo): dibaca semua orang agar tampil di halaman masuk, diubah hanya oleh owner
-    match /settings/{sid} {
-      allow read: if true;
-      allow write: if isOwner() && sid == 'app';
+    // Log aktivitas: pengguna terdaftar menulis catatannya sendiri; hanya owner yang membaca.
+    // Tidak bisa diubah atau dihapus dari aplikasi.
+    match /logs/{lid} {
+      allow read: if isOwner();
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.at is number
+        && request.resource.data.action is string && request.resource.data.action.size() <= 60
+        && (isOwner() || exists(/databases/$(database)/documents/users/$(request.auth.uid)));
+      allow update, delete: if false;
     }
 
     match /{document=**} {
