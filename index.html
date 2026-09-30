@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kas Aceh Mandiri Utama</title>
+<meta name="description" content="Buku kas multi-cabang CV/PT Aceh Mandiri Utama">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{color-scheme:light}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar"><div class="topbar-in" id="topbar">
+  <div class="brand"><span class="brand-mark">AMU</span><span>Kas Aceh Mandiri Utama</span></div>
+</div></header>
+<main id="app"><div class="loading">Memuat buku kas…</div></main>
+<div id="modal-root"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

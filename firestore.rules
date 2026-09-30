@@ -1,0 +1,71 @@
+rules_version = '2';
+
+// Aturan keamanan Buku Kas Aceh Mandiri Utama.
+// Ganti email di fungsi isOwner() dengan email akun owner (sama dengan firebase-config.js).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      return signedIn() && request.auth.token.email == 'email-owner@contoh.com';
+    }
+
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Kasir aktif dari cabang aktif `bid`
+    function isStaffOf(bid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && profile().role == 'cabang'
+        && profile().active == true
+        && profile().branchId == bid
+        && get(/databases/$(database)/documents/branches/$(bid)).data.active != false;
+    }
+
+    function validTx(d) {
+      return d.keys().hasAll(['branchId', 'type', 'amount', 'date', 'no', 'desc', 'createdBy', 'createdAt'])
+        && d.type in ['in', 'out']
+        && d.amount is number && d.amount > 0 && d.amount < 100000000000000
+        && d.date is string && d.date.size() == 10
+        && d.desc is string && d.desc.size() > 0 && d.desc.size() <= 500
+        && d.createdBy == request.auth.uid;
+    }
+
+    // Akun kasir: dibuat dan diubah hanya oleh owner; kasir hanya membaca profilnya sendiri
+    match /users/{uid} {
+      allow read: if isOwner() || (signedIn() && request.auth.uid == uid);
+      allow write: if isOwner();
+    }
+
+    // Cabang: hanya owner yang menambah, mengubah, menghapus
+    match /branches/{bid} {
+      allow read: if isOwner() || isStaffOf(bid);
+      allow write: if isOwner();
+    }
+
+    // Transaksi: kasir hanya membaca dan menambah di cabangnya sendiri; hanya owner yang mengubah/menghapus
+    match /tx/{tid} {
+      allow read: if isOwner() || isStaffOf(resource.data.branchId);
+      allow create: if (isOwner() || isStaffOf(request.resource.data.branchId)) && validTx(request.resource.data);
+      allow update, delete: if isOwner();
+    }
+
+    // Lampiran kwitansi (foto/PDF yang dikecilkan), satu dokumen per transaksi
+    match /att/{tid} {
+      allow read: if isOwner() || isStaffOf(resource.data.branchId);
+      allow create: if (isOwner() || isStaffOf(request.resource.data.branchId))
+        && request.resource.data.dataUrl is string
+        && request.resource.data.dataUrl.size() < 900000;
+      allow delete: if isOwner();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
