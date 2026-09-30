@@ -1,13 +1,14 @@
-// Ganti isi objek ini dengan konfigurasi dari Firebase Console:
-// Project settings → General → Your apps → Web app → SDK setup and configuration → Config
+// Konfigurasi Firebase untuk proyek cashflow-amu.
+// Aman dipublikasikan: nilai ini hanya menunjuk ke proyek, bukan kunci rahasia.
+// Data dilindungi oleh firestore.rules.
 export const firebaseConfig = {
-  apiKey: "ISI_API_KEY",
-  authDomain: "ISI_PROJECT_ID.firebaseapp.com",
-  projectId: "ISI_PROJECT_ID",
-  storageBucket: "ISI_PROJECT_ID.appspot.com",
-  messagingSenderId: "ISI_SENDER_ID",
-  appId: "ISI_APP_ID"
+  apiKey: "AIzaSyAQoyF1IvU9BCyINiuI-EY778oHN54FPz4",
+  authDomain: "cashflow-amu.firebaseapp.com",
+  projectId: "cashflow-amu",
+  storageBucket: "cashflow-amu.firebasestorage.app",
+  messagingSenderId: "618480455302",
+  appId: "1:618480455302:web:0be49faed1464cffd48b07"
 };
 
-// Email akun owner. Harus sama persis dengan OWNER_EMAIL di firestore.rules.
-export const OWNER_EMAIL = "email-owner@contoh.com";
+// Email akun owner. Harus sama persis dengan email di firestore.rules.
+export const OWNER_EMAIL = "cashflow.amu@gmail.com";

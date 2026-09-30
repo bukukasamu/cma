@@ -107,6 +107,56 @@ function sums(list, month){
 }
 const sortTx = (a,b)=> (a.date<b.date?-1:a.date>b.date?1:(a.createdAt||0)-(b.createdAt||0));
 
+/* ---------- logo ---------- */
+S.logo=null;
+function logoHtml(cls){
+  return S.logo && S.logo.dataUrl
+    ? `<img class="${cls}" src="${S.logo.dataUrl}" alt="Logo Aceh Mandiri Utama">`
+    : `<span class="${cls} logo-default" aria-label="Logo Aceh Mandiri Utama">AMU</span>`;
+}
+function paintLogos(){
+  document.querySelectorAll("[data-logo]").forEach(el=>{ el.innerHTML=logoHtml(el.dataset.logo); });
+  const fav=$("#favicon");
+  if(fav) fav.href = S.logo && S.logo.dataUrl ? S.logo.dataUrl : fav.dataset.default;
+}
+onSnapshot(doc(db,"settings","app"), d=>{
+  const data=d.exists()?d.data():null;
+  S.logo = data && data.logo && data.logo.dataUrl ? data.logo : null;
+  paintLogos();
+}, ()=>{});
+
+async function readLogo(file){
+  if(!file) return null;
+  if(!file.type.startsWith("image/")) throw new Error("Logo harus berupa gambar (PNG, JPG, SVG, atau WEBP).");
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error("Gambar tidak bisa dibaca.")); i.src=url;});
+    const iw=img.naturalWidth||512, ih=img.naturalHeight||512;
+    const sc=Math.min(1,512/Math.max(iw,ih));
+    const w=Math.max(1,Math.round(iw*sc)), h=Math.max(1,Math.round(ih*sc));
+    const c=document.createElement("canvas"); c.width=w; c.height=h;
+    const g=c.getContext("2d"); g.drawImage(img,0,0,w,h);
+    let d=c.toDataURL("image/png"), mime="image/png";
+    if(d.length>500000){
+      g.globalCompositeOperation="destination-over"; g.fillStyle="#fff"; g.fillRect(0,0,w,h);
+      d=c.toDataURL("image/jpeg",0.85); mime="image/jpeg";
+    }
+    if(d.length>800000) throw new Error("Logo terlalu besar. Pakai gambar yang lebih kecil.");
+    return {dataUrl:d,mime,w,h};
+  } finally { URL.revokeObjectURL(url); }
+}
+
+async function saveLogo(input){
+  const file=input.files[0]; if(!file) return;
+  showErr("#logo-err","");
+  try{
+    const logo=await readLogo(file);
+    await setDoc(doc(db,"settings","app"),{logo,updatedAt:Date.now()},{merge:true});
+    toast("Logo diperbarui");
+  }catch(err){ showErr("#logo-err",errText(err)); }
+  finally{ input.value=""; }
+}
+
 /* ---------- auth flow ---------- */
 onAuthStateChanged(auth, async user=>{
   stopAll(); shellFor=null;
@@ -163,12 +213,14 @@ function renderTop(){
   let who="", tabs="";
   if(S.role==="owner"){
     who=`<span class="who">Owner</span>`;
-    tabs=`<nav class="tabs"><button data-go="dash" class="${S.view==="dash"||S.view==="cabang"?"on":""}">Ringkasan</button><button data-go="kelola" class="${S.view==="kelola"?"on":""}">Kelola cabang</button></nav>`;
+    tabs=`<nav class="tabs"><button data-go="dash" class="${S.view==="dash"||S.view==="cabang"?"on":""}">Ringkasan</button><button data-go="kelola" class="${S.view==="kelola"?"on":""}">Kelola cabang</button><button data-go="pengaturan" class="${S.view==="pengaturan"?"on":""}">Pengaturan</button></nav>`;
   } else if(S.role==="cabang"){
     const b=branchById(S.profile?.branchId);
     who=`<span class="who">Cabang ${esc(b?b.name:"")} · ${esc(S.profile?.name||"")}</span>`;
   }
-  $("#topbar").innerHTML = `<div class="brand"><span class="brand-mark">AMU</span><span>Kas Aceh Mandiri Utama</span></div>${who}${tabs}${S.user?`<button class="btn ghost sm ${tabs?"":"spacer"}" id="logout">Keluar</button>`:""}`;
+  document.querySelector(".topbar").hidden = !S.user;
+  document.body.classList.toggle("is-auth", !S.user || !!S.fatal);
+  $("#topbar").innerHTML = `<div class="brand"><span data-logo="brand-logo">${logoHtml("brand-logo")}</span><span>Kas Aceh Mandiri Utama</span></div>${who}${tabs}${S.user?`<button class="btn ghost sm ${tabs?"":"spacer"}" id="logout">Keluar</button>`:""}`;
 }
 
 /* ---------- views ---------- */
@@ -200,23 +252,28 @@ function txForm(withBranch){
 function renderView(){
   renderTop();
   const appEl=$("#app");
-  if(S.fatal){
-    appEl.innerHTML=`<section class="login"><div class="login-head"><p class="eyebrow">Buku kas perusahaan</p><h1>Aceh Mandiri Utama</h1></div>
-      <div class="panel"><p>${esc(S.fatal)}</p><button class="btn" id="logout2" style="justify-self:start">Keluar dan masuk dengan akun lain</button></div></section>`;
-    return;
-  }
-  if(!S.user){
-    appEl.innerHTML = `<section class="login">
-      <div class="login-head"><p class="eyebrow">Buku kas perusahaan</p><h1>Aceh Mandiri Utama</h1>
-      <p class="lede">Catat uang masuk dan keluar per cabang. Kasir hanya bisa membuka buku kas cabangnya sendiri; owner melihat semua cabang.</p></div>
-      <div class="login-grid"><div class="panel"><h2>Masuk</h2>
-        <form id="login-form" novalidate>
-          <label for="login-email">Email<input id="login-email" type="email" autocomplete="username"></label>
-          <label for="login-pw">Password<input id="login-pw" type="password" autocomplete="current-password"></label>
-          <p class="err" id="login-err" hidden></p>
-          <button class="btn primary" type="submit" id="login-btn">Masuk</button>
-          <button class="link" type="button" id="forgot" style="justify-self:start">Lupa password?</button>
-        </form></div></div></section>`;
+  if(S.fatal || !S.user){
+    const formSide = S.fatal
+      ? `<p class="eyebrow">Akses belum tersedia</p><h1>Belum bisa membuka buku kas</h1>
+         <p class="lede">${esc(S.fatal)}</p>
+         <button class="btn" id="logout2" style="justify-self:start">Keluar dan masuk dengan akun lain</button>`
+      : `<p class="eyebrow">Buku kas perusahaan</p><h1>Masuk ke akun Anda</h1>
+         <p class="lede">Gunakan email dan password yang diberikan owner.</p>
+         <form id="login-form" novalidate>
+           <label for="login-email">Email<input id="login-email" type="email" autocomplete="username" placeholder="nama@email.com"></label>
+           <label for="login-pw">Password<input id="login-pw" type="password" autocomplete="current-password"></label>
+           <p class="err" id="login-err" hidden></p>
+           <button class="btn primary btn-block" type="submit" id="login-btn">Masuk</button>
+           <button class="link" type="button" id="forgot" style="justify-self:start">Lupa password?</button>
+         </form>
+         <p class="hint">Kasir hanya bisa membuka buku kas cabangnya sendiri. Akun kasir dibuat oleh owner.</p>`;
+    appEl.innerHTML = `<section class="auth">
+      <div class="auth-form"><div class="auth-form-in">${formSide}</div></div>
+      <aside class="auth-brand" aria-label="Aceh Mandiri Utama">
+        <div class="logo-tile"><span data-logo="logo-big">${logoHtml("logo-big")}</span></div>
+        <div class="auth-brand-text"><h2>Aceh Mandiri Utama</h2><p>Kas masuk dan keluar seluruh cabang, tercatat rapi dalam satu buku.</p></div>
+        <ul class="auth-points"><li>Buku kas per cabang dengan saldo berjalan</li><li>Kwitansi PDF lengkap dengan terbilang</li><li>Owner memantau semua cabang sekaligus</li></ul>
+      </aside></section>`;
     return;
   }
   if(!(S.bReady && S.tReady && S.uReady)){ appEl.innerHTML=`<div class="loading">Memuat buku kas…</div>`; return; }
@@ -245,6 +302,18 @@ function renderView(){
         </div>
         <div class="panel"><h2>Daftar cabang</h2><div id="manage-list" class="mlist"></div></div>
       </div>`;
+  }
+  else if(S.role==="owner" && S.view==="pengaturan"){
+    appEl.innerHTML = `<div class="sec-head"><div><p class="eyebrow">Owner</p><h1>Pengaturan</h1></div></div>
+      <div class="panel" style="max-width:620px">
+        <h2>Logo perusahaan</h2>
+        <p class="hint">Logo tampil di halaman masuk, bilah atas, dan kwitansi PDF. Gambar PNG berlatar transparan hasilnya paling rapi.</p>
+        <div class="logo-preview"><div class="logo-tile sm"><span data-logo="logo-big">${logoHtml("logo-big")}</span></div></div>
+        <label for="logo-file">Pilih gambar logo baru<input type="file" id="logo-file" accept="image/*"></label>
+        <p class="err" id="logo-err" hidden></p>
+        <button class="btn sm" id="logo-reset" style="justify-self:start">Pakai logo bawaan</button>
+      </div>`;
+    return;
   }
   else {
     const ownerDetail = S.role==="owner";
@@ -545,9 +614,17 @@ async function downloadPdf(){
     const L=kwLabels(t);
     const pdf=new window.jspdf.jsPDF({orientation:"landscape",unit:"mm",format:"a5"});
     pdf.setDrawColor(30); pdf.setLineWidth(0.5); pdf.rect(8,8,194,132);
-    pdf.setFont("helvetica","bold"); pdf.setFontSize(14); pdf.text(COMPANY,14,19);
+    let hx=14;
+    if(S.logo && S.logo.dataUrl){
+      try{
+        let lh=16, lw=lh*(S.logo.w||1)/(S.logo.h||1); if(lw>34){ lw=34; lh=lw*(S.logo.h||1)/(S.logo.w||1); }
+        pdf.addImage(S.logo.dataUrl, S.logo.mime==="image/jpeg"?"JPEG":"PNG", 14, 11+(16-lh)/2, lw, lh);
+        hx=14+lw+4;
+      }catch(e){}
+    }
+    pdf.setFont("helvetica","bold"); pdf.setFontSize(14); pdf.text(COMPANY,hx,19);
     pdf.setFont("helvetica","normal"); pdf.setFontSize(9);
-    pdf.text(pdf.splitTextToSize("Cabang "+b.name+(b.city?" - "+b.city:""),110),14,24.5);
+    pdf.text(pdf.splitTextToSize("Cabang "+b.name+(b.city?" - "+b.city:""),120-hx),hx,24.5);
     pdf.setFont("helvetica","bold"); pdf.setFontSize(12); pdf.text(L.title.toUpperCase(),196,19,{align:"right"});
     pdf.setFont("courier","normal"); pdf.setFontSize(9.5); pdf.text("No. "+t.no,196,24.5,{align:"right"});
     pdf.setLineWidth(0.3); pdf.line(14,30,196,30);
@@ -632,6 +709,10 @@ document.addEventListener("click", async e=>{
   if(d.close!==undefined) return closeModal();
   if(el.id==="csv") return exportCsv();
   if(S.role!=="owner") return;
+  if(el.id==="logo-reset"){
+    try{ await setDoc(doc(db,"settings","app"),{logo:null,updatedAt:Date.now()},{merge:true}); toast("Kembali ke logo bawaan"); }catch(err){ toast(errText(err)); }
+    return;
+  }
   if(d.del){
     if(!arm(el,"del"+d.del,"Yakin hapus?")) return;
     try{ const t=S.tx.find(x=>x.id===d.del); await deleteDoc(doc(db,"tx",d.del)); if(t&&t.hasAtt) await deleteDoc(doc(db,"att",d.del)); toast("Transaksi dihapus"); }
@@ -661,5 +742,6 @@ document.addEventListener("input", e=>{
 });
 document.addEventListener("change", e=>{
   if(e.target.id==="month" && e.target.value){ S.month=e.target.value; fill(); }
+  if(e.target.id==="logo-file" && S.role==="owner") saveLogo(e.target);
 });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });

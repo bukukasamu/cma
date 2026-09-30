@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // Aturan keamanan Buku Kas Aceh Mandiri Utama.
-// Ganti email di fungsi isOwner() dengan email akun owner (sama dengan firebase-config.js).
+// Email owner di isOwner() harus sama dengan OWNER_EMAIL di firebase-config.js.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -10,7 +10,7 @@ service cloud.firestore {
     }
 
     function isOwner() {
-      return signedIn() && request.auth.token.email == 'email-owner@contoh.com';
+      return signedIn() && request.auth.token.email == 'cashflow.amu@gmail.com';
     }
 
     function profile() {
@@ -62,6 +62,12 @@ service cloud.firestore {
         && request.resource.data.dataUrl is string
         && request.resource.data.dataUrl.size() < 900000;
       allow delete: if isOwner();
+    }
+
+    // Pengaturan tampilan (logo): dibaca semua orang agar tampil di halaman masuk, diubah hanya oleh owner
+    match /settings/{sid} {
+      allow read: if true;
+      allow write: if isOwner() && sid == 'app';
     }
 
     match /{document=**} {

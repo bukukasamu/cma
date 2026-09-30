@@ -21,13 +21,12 @@ Batasan ini dijaga oleh `firestore.rules` di server Firebase, bukan hanya oleh t
 ### 1. Buat proyek Firebase
 1. Buka https://console.firebase.google.com dan buat proyek baru.
 2. **Build → Authentication → Get started →** aktifkan **Email/Password**.
-3. Di tab **Users**, tekan **Add user** dan buat akun owner (email + password Anda). Lakukan ini lebih dulu, sebelum situs dipublikasikan.
+3. Di tab **Users**, tekan **Add user** dan buat akun owner `cashflow.amu@gmail.com` dengan password pilihan Anda. Lakukan ini lebih dulu, sebelum situs dipublikasikan.
 4. **Build → Firestore Database → Create database** (lokasi disarankan `asia-southeast2` Jakarta), mode production.
 5. **Project settings → General → Your apps →** tambahkan aplikasi **Web** (ikon `</>`), lalu salin objek `firebaseConfig`.
 
-### 2. Isi konfigurasi
-- `firebase-config.js`: tempel `firebaseConfig` dan isi `OWNER_EMAIL` dengan email owner.
-- `firestore.rules`: ganti `email-owner@contoh.com` dengan email owner yang sama.
+### 2. Konfigurasi
+Sudah terisi untuk proyek `cashflow-amu` dengan owner `cashflow.amu@gmail.com` (di `firebase-config.js` dan `firestore.rules`). Jika email owner diganti, ubah di kedua file.
 
 ### 3. Pasang aturan keamanan
 Di **Firestore Database → Rules**, hapus isinya, tempel isi `firestore.rules`, lalu **Publish**.
@@ -43,6 +42,15 @@ Di **Firestore Database → Rules**, hapus isinya, tempel isi `firestore.rules`,
 1. Buka situs, masuk dengan akun owner.
 2. **Kelola cabang →** tambah cabang, lalu **+ Tambah akun kasir** untuk tiap cabang.
 3. Berikan email dan password itu ke kasir. Kasir bisa mengganti password lewat **Lupa password?** di halaman masuk.
+
+## Mengganti logo
+Masuk sebagai owner → **Pengaturan** → pilih gambar logo. Logo langsung tampil di halaman masuk, bilah atas, dan kwitansi PDF. PNG berlatar transparan hasilnya paling rapi.
+
+## Keamanan kunci API
+`firebaseConfig` (termasuk `apiKey`) memang dirancang untuk terlihat di browser, jadi aman ada di GitHub. Untuk lapisan tambahan:
+1. Buka https://console.cloud.google.com/apis/credentials (proyek `cashflow-amu`).
+2. Pilih **Browser key (auto created by Firebase)** → **Application restrictions: Websites**.
+3. Tambahkan `https://<username>.github.io/*` dan `https://cashflow-amu.firebaseapp.com/*`, lalu simpan.
 
 ## Catatan
 - `firebaseConfig` memang aman untuk dipublikasikan; yang melindungi data adalah `firestore.rules`.
