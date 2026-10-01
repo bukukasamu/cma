@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Aturan keamanan Kas Aceh Mandiri Utama (v2.2).
+// Aturan keamanan Cashflow Management AMU (v4).
 // Email owner di isOwner() harus sama dengan OWNER_EMAIL di firebase-config.js.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -32,10 +32,45 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/settings/categories).data[t];
     }
 
+    // ---- Tanggal dalam WIB sebagai angka YYYYMMDD ----
+    function dateNum(s) {
+      return int(s.split('-')[0] + s.split('-')[1] + s.split('-')[2]);
+    }
+    function wibNum(ts) {
+      return ts.year() * 10000 + ts.month() * 100 + ts.day();
+    }
+    // Kasir hanya boleh mencatat tanggal hari ini atau kemarin (WIB)
+    function staffDateOk(d) {
+      return dateNum(d.date) >= wibNum(request.time + duration.value(7, 'h') - duration.value(1, 'd'))
+        && dateNum(d.date) <= wibNum(request.time + duration.value(7, 'h'));
+    }
+
+    // ---- Nomor bukti & ringkasan saldo bulanan ----
+    function ym(d) {
+      return d.date.split('-')[0] + d.date.split('-')[1];
+    }
+    function counterPath(d) {
+      return /databases/$(database)/documents/counters/$(d.branchId + '_' + d.type + '_' + ym(d));
+    }
+    function sumPath(d) {
+      return /databases/$(database)/documents/sums/$(d.branchId + '_' + ym(d));
+    }
+    // Nomor urut transaksi harus sama dengan penghitung yang dinaikkan di transaksi yang sama
+    function seqOk(d) {
+      return d.seq is int && getAfter(counterPath(d)).data.n == d.seq;
+    }
+    // Ringkasan bulanan harus bertambah tepat sebesar nominal transaksi
+    function sumOk(d) {
+      let f = d.type + 'Amt';
+      let after = getAfter(sumPath(d)).data.get(f, 0);
+      return (!exists(sumPath(d)) && after == d.amount)
+        || (exists(sumPath(d)) && after == get(sumPath(d)).data.get(f, 0) + d.amount);
+    }
+
     function validTx(d) {
-      return d.keys().hasAll(['branchId', 'type', 'amount', 'date', 'no', 'desc', 'category', 'createdBy', 'createdAt'])
+      return d.keys().hasAll(['branchId', 'type', 'amount', 'date', 'no', 'seq', 'desc', 'category', 'createdBy', 'createdAt'])
         && d.type in ['in', 'out']
-        && d.amount is number && d.amount > 0 && d.amount < 100000000000000
+        && d.amount is int && d.amount > 0 && d.amount < 100000000000000
         && d.date is string && d.date.size() == 10
         && d.desc is string && d.desc.size() > 0 && d.desc.size() <= 500
         && d.category is string && d.category in catList(d.type)
@@ -66,24 +101,48 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
-    // Transaksi: kasir hanya membaca dan menambah di cabangnya sendiri; hanya owner yang mengubah/menghapus
+    // Transaksi
+    // - Kasir: hanya cabangnya sendiri, tanggal hari ini/kemarin, nomor dari penghitung server
+    // - Owner: semua cabang, tanggal bebas; hanya owner yang mengedit dan menghapus
     match /tx/{tid} {
       allow read: if isOwner() || isStaffOf(resource.data.branchId);
-      allow create: if (isOwner() || isStaffOf(request.resource.data.branchId)) && validTx(request.resource.data);
-      // Edit & hapus hanya owner, termasuk transaksi yang dicatat kasir
+      allow create: if validTx(request.resource.data)
+        && seqOk(request.resource.data)
+        && sumOk(request.resource.data)
+        && (isOwner() || (isStaffOf(request.resource.data.branchId) && staffDateOk(request.resource.data)));
       allow update: if isOwner() && validEdit(request.resource.data);
       allow delete: if isOwner();
     }
 
-    // Pengaturan: 'app' (logo) terbuka untuk halaman masuk; 'categories' untuk pengguna yang sudah masuk.
+    // Penghitung nomor bukti per cabang, jenis, dan bulan: hanya boleh naik satu per satu
+    match /counters/{cid} {
+      allow read: if isOwner() || isStaffOf(cid.split('_')[0]);
+      allow create: if (isOwner() || isStaffOf(cid.split('_')[0]))
+        && request.resource.data.n is int && request.resource.data.n >= 1 && request.resource.data.n <= 100000;
+      allow update: if (isOwner() || isStaffOf(cid.split('_')[0]))
+        && request.resource.data.n == resource.data.n + 1;
+      allow delete: if false;
+    }
+
+    // Ringkasan saldo per cabang per bulan (dipakai untuk saldo tanpa memuat semua transaksi)
+    match /sums/{sid} {
+      allow read: if isOwner() || (resource.data.branchId is string && isStaffOf(resource.data.branchId));
+      allow write: if isOwner();
+      allow create: if isStaffOf(sid.split('_')[0]) && request.resource.data.branchId == sid.split('_')[0];
+      allow update: if isStaffOf(sid.split('_')[0])
+        && request.resource.data.branchId == resource.data.branchId
+        && request.resource.data.get('inAmt', 0) >= resource.data.get('inAmt', 0)
+        && request.resource.data.get('outAmt', 0) >= resource.data.get('outAmt', 0);
+    }
+
+    // Pengaturan: 'app' terbuka untuk halaman masuk; lainnya untuk pengguna yang sudah masuk.
     // Hanya owner yang mengubah.
     match /settings/{sid} {
       allow read: if sid == 'app' || signedIn();
-      allow write: if isOwner() && sid in ['app', 'categories'];
+      allow write: if isOwner() && sid in ['app', 'categories', 'meta'];
     }
 
     // Log aktivitas: pengguna terdaftar menulis catatannya sendiri; hanya owner yang membaca.
-    // Tidak bisa diubah atau dihapus dari aplikasi.
     match /logs/{lid} {
       allow read: if isOwner();
       allow create: if signedIn()

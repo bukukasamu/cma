@@ -1,29 +1,19 @@
-/* Kas Aceh Mandiri Utama · v2
-   Layout: bilah atas + tab (bawah di HP tegak), ringkasan klik-able, insight 2 kolom, formulir di samping buku kas.
-   Palet segar: hijau mint sebagai aksen, koral untuk uang keluar, latar mint pucat. */
+/* Cashflow Management AMU · v3
+   Layout: bilah atas + tab (di bawah saat HP tegak); halaman Input terpisah; ringkasan & buku kas di tab sendiri.
+   Palet: dongker dari latar logo sebagai warna utama, di atas latar terang; emas logo sebagai aksen. Satu tema terang. */
 :root{
-  --bg:#f2faf6; --surface:#ffffff; --soft:#e4f5ee; --soft-2:#f6fcf9; --ink:#10302a; --muted:#587169; --line:#d4eae1;
-  --accent:#0ea47d; --accent-strong:#08805f; --accent-ink:#ffffff; --sun:#ffb23f;
-  --in:#0f9e57; --out:#ec5a42; --in-bg:#e0f6ea; --out-bg:#fdebe6; --warn:#a86b00;
-  --brand-a:#1cc79d; --brand-b:#08826a; --brand-ink:#f2fffa; --brand-line:rgba(255,255,255,.09); --brand-margin:rgba(255,190,160,.55);
-  --shadow:0 1px 2px rgba(16,48,42,.05),0 6px 20px rgba(16,48,42,.06);
+  color-scheme:light;
+  --bg:#f3f6fc; --surface:#ffffff; --soft:#e8eef9; --soft-2:#f7f9fe; --ink:#0d1b3a; --muted:#56627d; --line:#dbe3f1;
+  --accent:#1546a0; --accent-strong:#0e3479; --accent-ink:#ffffff; --sun:#f2b33d;
+  --in:#12955a; --out:#e0453a; --in-bg:#e3f5ec; --out-bg:#fdeceb; --warn:#9a6400; --warn-bg:#fff6e0;
+  --brand-a:#1d5cc4; --brand-b:#0a2a66; --brand-ink:#ffffff; --brand-line:rgba(255,255,255,.07); --brand-margin:rgba(242,179,61,.5);
+  --navy-deep:#030d1c; --navy-mid:#0e4589;
+  --shadow:0 1px 2px rgba(13,27,58,.05),0 8px 24px rgba(13,27,58,.07);
   --f-body:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
   --gutter:max(16px, env(safe-area-inset-left, 0px));
   --gutter-r:max(16px, env(safe-area-inset-right, 0px));
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0a1714; --surface:#10221e; --soft:#153129; --soft-2:#0d1d19; --ink:#e2f5ee; --muted:#91b0a7; --line:#1f3d36;
-  --accent:#2fd6a8; --accent-strong:#5fe3bf; --accent-ink:#04241c; --sun:#ffc262;
-  --in:#48dc92; --out:#ff8a72; --in-bg:#113524; --out-bg:#3a1b15; --warn:#e8b458;
-  --brand-a:#12a583; --brand-b:#06453a; --brand-ink:#eafff8;
-  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.25); color-scheme:dark }}
-:root[data-theme="dark"]{
-  --bg:#0a1714; --surface:#10221e; --soft:#153129; --soft-2:#0d1d19; --ink:#e2f5ee; --muted:#91b0a7; --line:#1f3d36;
-  --accent:#2fd6a8; --accent-strong:#5fe3bf; --accent-ink:#04241c; --sun:#ffc262;
-  --in:#48dc92; --out:#ff8a72; --in-bg:#113524; --out-bg:#3a1b15; --warn:#e8b458;
-  --brand-a:#12a583; --brand-b:#06453a; --brand-ink:#eafff8;
-  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.25); color-scheme:dark }
 
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -360,3 +350,142 @@ body.is-auth main{max-width:none;padding:0;display:block}
 }
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+
+/* ================= v3 ================= */
+/* Cegah halaman melebar di HP: semua isi grid boleh menyusut, tabel menggulir di wadahnya sendiri */
+main{grid-template-columns:minmax(0,1fr)}
+main > *, .split > *, .insights > *, .input-wrap > *, .panel > *{min-width:0}
+html,body{max-width:100%}
+.panel-head .hint{white-space:normal}
+
+.brand-logo{height:36px;width:36px;max-width:none;border-radius:9px;object-fit:cover;display:block;box-shadow:0 0 0 1px var(--line)}
+.who{color:var(--accent)}
+.stat.lead{background:linear-gradient(135deg,var(--brand-a),var(--brand-b))}
+.acct .av{background:linear-gradient(135deg,var(--brand-a),var(--brand-b))}
+.tabs button.on{background:var(--soft);color:var(--accent)}
+.eyebrow{color:var(--accent)}
+.cbar .fill.out{background:linear-gradient(90deg,var(--out),var(--sun))}
+.cbar .fill.in{background:linear-gradient(90deg,var(--in),#3fc28a)}
+.step{background:var(--accent)}
+
+/* Halaman Input */
+.input-wrap{display:grid;grid-template-columns:minmax(0,520px) minmax(0,1fr);gap:18px;align-items:start}
+.input-panel{border-top:4px solid var(--accent)}
+#tx-form[data-type=in] ~ *, .input-panel:has(#tx-form[data-type=in]){border-top-color:var(--in)}
+.input-panel:has(#tx-form[data-type=out]){border-top-color:var(--out)}
+
+/* Peringatan di form edit */
+.warn{background:var(--warn-bg);border:1px solid #f1d48f;color:#5a3d00;border-radius:12px;padding:10px 12px;font-size:.84rem;line-height:1.45}
+.warn ul{margin:6px 0 0;padding-left:18px;display:grid;gap:3px}
+.staff-item{display:grid;gap:8px}
+.edit-form{border-color:var(--accent)}
+
+/* Halaman masuk: formulir di kiri, logo di kanan */
+.auth{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}
+.auth-form{background:var(--surface)}
+.auth-form-in{max-width:360px;gap:20px}
+.app-name{font-size:1.75rem;font-weight:800;letter-spacing:-.015em;color:var(--ink);text-align:center}
+.auth-form-in .lede{color:var(--muted);text-align:center}
+.auth-brand{display:grid;place-items:center;padding:40px;background:linear-gradient(180deg,var(--navy-deep) 0%,var(--navy-mid) 50%,var(--navy-deep) 100%)}
+.auth-brand::before{display:none}
+.auth-logo{width:min(480px,80%);aspect-ratio:1;object-fit:cover;border-radius:28px;display:block;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+
+@media (max-width:900px){
+  .input-wrap{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:640px){
+  .brand-name{display:none}
+  .app-name{font-size:1.45rem}
+}
+@media (max-width:760px) and (orientation:portrait){
+  .auth{grid-template-columns:minmax(0,1fr)}
+  .auth-brand{order:-1;padding:calc(24px + env(safe-area-inset-top,0px)) 20px 24px}
+  .auth-logo{width:min(230px,62vw);border-radius:22px}
+  .auth-form{padding:28px 20px calc(40px + env(safe-area-inset-bottom,0px));place-items:start center}
+  .tabs .tab-input svg{color:var(--accent)}
+}
+@media (orientation:landscape) and (max-height:560px){
+  .auth{grid-template-columns:minmax(0,1fr) minmax(0,.9fr)}
+  .auth-brand{padding:16px}
+  .auth-logo{width:min(300px,78vh);border-radius:20px}
+  .auth-form-in{gap:12px}
+  .app-name{font-size:1.3rem}
+  .input-wrap{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}
+
+/* Buku kas di HP: tiap transaksi jadi kartu, tidak perlu geser ke samping */
+@media (max-width:640px){
+  .ledger-wrap{overflow:visible;border-radius:12px}
+  .ledger-wrap table{min-width:0;font-size:.88rem}
+  .ledger-wrap thead{display:none}
+  .ledger-wrap tbody{display:block}
+  .ledger-wrap tr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:3px 10px;padding:11px 12px;border-top:1px solid var(--line);align-items:baseline}
+  .ledger-wrap tr:first-child{border-top:0}
+  .ledger-wrap td{display:block;border:0;padding:0;background:none}
+  .ledger-wrap td:empty{display:none}
+  .ledger-wrap .c-date{grid-column:1;font-weight:700}
+  .ledger-wrap .c-no{grid-column:2 / 4;text-align:right;font-size:.74rem}
+  .ledger-wrap .c-desc{grid-column:1 / -1}
+  .ledger-wrap .c-in,.ledger-wrap .c-out{grid-column:1 / 3;text-align:left;font-weight:700;font-size:1rem}
+  .ledger-wrap .c-in::before{content:"+ "}
+  .ledger-wrap .c-out::before{content:"− "}
+  .ledger-wrap tr:not(.carry) .c-bal{grid-column:3;text-align:right;font-size:.8rem;color:var(--muted)}
+  .ledger-wrap tr:not(.carry) .c-bal::before{content:"saldo ";font-family:var(--f-body)}
+  .ledger-wrap .c-act{grid-column:1 / -1}
+  .ledger-wrap .c-act .acts{justify-content:flex-start;margin-top:4px}
+  .ledger-wrap tr.carry{background:var(--soft-2)}
+  .ledger-wrap tr.carry .c-label{grid-column:1 / 3}
+  .ledger-wrap tr.carry .c-bal{grid-column:3}
+  .ledger-wrap tr.none{display:block}
+}
+
+/* ================= v3.1: analisis & watermark ================= */
+.filters{gap:12px}
+.frow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.flabel{font-size:.78rem;font-weight:800;color:var(--muted);min-width:64px}
+.fchip{border:1px solid var(--line);background:var(--soft-2);border-radius:99px;padding:6px 12px;font-weight:700;font-size:.84rem;cursor:pointer;color:var(--ink)}
+.fchip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.frow.selects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.an-total{border:1px solid var(--line);background:var(--soft-2);border-radius:14px;padding:12px 14px;display:grid;gap:2px;text-align:left;cursor:pointer}
+.an-total:hover,.rank:hover{border-color:var(--accent)}
+.an-total .l{font-size:.8rem;font-weight:700;color:var(--muted)}
+.an-total .v{font-size:1.45rem;font-weight:600}
+.an-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.an-grid > *{min-width:0}
+.span-all{grid-column:1 / -1}
+.sortsw{display:flex;gap:4px}
+.sortsw .fchip{padding:4px 10px;font-size:.76rem}
+.ranks{display:grid;gap:2px}
+.rank{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:3px 10px;align-items:center;border:1px solid transparent;background:none;border-radius:12px;padding:8px;text-align:left;cursor:pointer}
+.rank:hover{background:var(--soft-2)}
+.rank .rk{width:24px;height:24px;border-radius:50%;background:var(--soft);display:grid;place-items:center;font-size:.72rem;font-weight:800;color:var(--accent)}
+.rank .rn{font-weight:700;font-size:.9rem;min-width:0;overflow-wrap:anywhere}
+.rank .rn small{display:block;font-weight:500;color:var(--muted);font-size:.74rem}
+.rank .rv{font-weight:600;font-size:.88rem}
+.rank .track{grid-column:2 / -1;height:7px;border-radius:99px;background:var(--soft);overflow:hidden}
+.rank .fill{display:block;height:100%;border-radius:99px}
+.rank .fill.out{background:linear-gradient(90deg,var(--out),var(--sun))}
+.rank .fill.in{background:linear-gradient(90deg,var(--in),#3fc28a)}
+.matrix-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+.matrix{border-collapse:collapse;width:100%;min-width:520px;font-size:.84rem}
+.matrix th,.matrix td{padding:9px 10px;border-top:1px solid var(--line);white-space:nowrap}
+.matrix thead th{background:var(--soft);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-top:0}
+.matrix tbody th{text-align:left;font-weight:700;position:sticky;left:0;background:var(--surface);z-index:1}
+.matrix td.hc,.matrix td.tot{cursor:pointer}
+.matrix td.hc:hover,.matrix td.tot:hover{outline:2px solid var(--accent);outline-offset:-2px}
+.matrix td.zero{color:var(--line)}
+.matrix td.tot{font-weight:700;background:var(--soft-2)}
+@media (max-width:760px){ .an-grid{grid-template-columns:minmax(0,1fr)} .frow.selects{grid-template-columns:1fr} }
+
+.kw{position:relative;overflow:hidden}
+.kw > *:not(.kw-wm){position:relative;z-index:1}
+.kw-wm{position:absolute;left:50%;top:50%;width:min(62%,320px);transform:translate(-50%,-50%);opacity:.09;pointer-events:none;z-index:0}
+
+/* ================= v4 ================= */
+.netbar{position:sticky;top:calc(57px + env(safe-area-inset-top,0px));z-index:9;background:var(--warn-bg);border-bottom:1px solid #f1d48f;color:#5a3d00;padding:9px var(--gutter-r) 9px var(--gutter);font-size:.86rem;text-align:center}
+body.is-auth .netbar{top:0}
+.search{display:grid;gap:8px}
+.search input{font-size:1rem}
+.remind{background:var(--warn-bg);border:1px solid #f1d48f;color:#5a3d00;border-radius:12px;padding:10px 14px;font-size:.88rem}
+.acct-sec{display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--soft-2)}

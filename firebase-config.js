@@ -12,3 +12,8 @@ export const firebaseConfig = {
 
 // Email akun owner. Harus sama persis dengan email di firestore.rules.
 export const OWNER_EMAIL = "cashflow.amu@gmail.com";
+
+// (Opsional) Untuk tombol "Simpan ke Google Drive" di menu Akun owner.
+// Isi dengan OAuth Client ID (jenis "Web application") dari Google Cloud Console. Lihat README bagian Backup.
+// Client ID bukan rahasia dan aman berada di GitHub. Biarkan kosong jika belum dipakai.
+export const GOOGLE_CLIENT_ID = "";
