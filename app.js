@@ -13,7 +13,7 @@ import * as CFG from "./firebase-config.js";
 const { firebaseConfig, OWNER_EMAIL } = CFG;
 const GOOGLE_CLIENT_ID = CFG.GOOGLE_CLIENT_ID || "";
 
-export const APP_VERSION = "4.0.0";
+export const APP_VERSION = "4.1.0";
 const COMPANY = "PT ACEH MANDIRI UTAMA";
 const APP_NAME = "Cashflow Management AMU";
 // Logo diambil dari file di repo. Untuk mengganti logo, ganti file logo.jpg (dan ikon di folder icons/) di GitHub.
@@ -271,10 +271,23 @@ function subscribeTx(fail){
   if(fail) txFail=fail;
   if(txUnsub){ try{ txUnsub(); }catch(e){} }
   const from=S.loadFrom+"-01";
+  // Kasir butuh indeks (branchId + date). Jika indeks belum ada/masih dibangun, pakai cara cadangan:
+  // ambil transaksi cabang tanpa filter tanggal, lalu saring di HP. Tetap jalan, hanya sedikit lebih boros.
+  const bid=S.profile?.branchId||"-";
   const q = S.role==="owner"
     ? query(collection(db,"tx"),where("date",">=",from))
-    : query(collection(db,"tx"),where("branchId","==",S.profile?.branchId||"-"),where("date",">=",from));
-  txUnsub=onSnapshot(q, snap=>{ S.tx=snap.docs.map(d=>({id:d.id,...d.data()})); S.tReady=true; onData(); fillQueueBar(); }, e=>txFail&&txFail(e));
+    : S.noIndex ? query(collection(db,"tx"),where("branchId","==",bid))
+    : query(collection(db,"tx"),where("branchId","==",bid),where("date",">=",from));
+  txUnsub=onSnapshot(q, snap=>{
+    S.tx=snap.docs.map(d=>({id:d.id,...d.data()})).filter(t=>S.role==="owner"||!S.noIndex||String(t.date)>=from);
+    S.tReady=true; onData(); fillQueueBar();
+  }, e=>{
+    if(e && e.code==="failed-precondition" && S.role!=="owner" && !S.noIndex){
+      console.warn("Indeks Firestore belum siap, memakai cara cadangan.", e.message);
+      S.noIndex=true; subscribeTx(); return;
+    }
+    txFail&&txFail(e);
+  });
   unsubs.push(txUnsub);
 }
 // Pastikan data sejak bulan `ym` (YYYY-MM) sudah dimuat
@@ -361,7 +374,7 @@ function txForm(withBranch){
     <label for="f-desc"><span><b class="step">3</b> Keterangan / catatan</span><textarea id="f-desc" rows="2" maxlength="500" placeholder="mis. Bayar listrik kantor bulan September"></textarea></label>
     <div class="row2">
       <label for="f-date">Tanggal<input type="date" id="f-date" value="${todayJkt()}" ${S.role==="cabang"?`min="${yesterdayJkt()}" max="${todayJkt()}"`:""}></label>
-      <label for="f-party"><span id="f-party-lbl">Dibayar kepada</span><input id="f-party" placeholder="Opsional"></label>
+      <label for="f-party"><span><span id="f-party-lbl">Dibayar kepada</span> <b class="req">*wajib</b></span><input id="f-party" placeholder="Nama orang atau toko" required></label>
     </div>
     ${S.role==="cabang"?`<p class="hint">Tanggal hanya bisa hari ini atau kemarin. Transaksi lebih lama dicatat oleh owner.</p>`:""}
     <p class="err" id="f-err" hidden></p>
@@ -930,6 +943,7 @@ async function saveTx(e){
   if(!amount){ showErr("#f-err","Isi nominal."); $("#f-amount").focus(); return; }
   if(!desc){ showErr("#f-err","Isi keterangan transaksi."); $("#f-desc").focus(); return; }
   if(!date){ showErr("#f-err","Isi tanggal."); return; }
+  if(!party){ showErr("#f-err",S.formType==="in"?"Isi nama pihak yang menyerahkan uang (Diterima dari).":"Isi nama penerima uang (Dibayar kepada)."); $("#f-party").focus(); return; }
   if(S.role==="cabang" && (date<yesterdayJkt() || date>todayJkt())){ showErr("#f-err","Kasir hanya bisa mencatat tanggal hari ini atau kemarin. Minta owner untuk tanggal lain."); return; }
   showErr("#f-err","");
   const rec={branchId:bid,type:S.formType,amount,date,category,desc,party,createdAt:Date.now()};
@@ -1154,7 +1168,7 @@ function openEdit(t){
       <label for="e-desc"><span><b class="step">3</b> Keterangan / catatan</span><textarea id="e-desc" rows="2" maxlength="500">${esc(t.desc||"")}</textarea></label>
       <div class="row2">
         <label for="e-date">Tanggal<input type="date" id="e-date" value="${esc(t.date)}"></label>
-        <label for="e-party"><span id="e-party-lbl">Pihak</span><input id="e-party" value="${esc(t.party||"")}" placeholder="Opsional"></label>
+        <label for="e-party"><span><span id="e-party-lbl">Pihak</span> <b class="req">*wajib</b></span><input id="e-party" value="${esc(t.party||"")}" placeholder="Nama orang atau toko" required></label>
       </div>
       <p class="hint" id="e-no-hint" hidden>Nomor bukti akan dibuat ulang karena jenis, cabang, atau bulan berubah.</p>
       <p class="err" id="e-err" hidden></p>
@@ -1192,6 +1206,7 @@ async function saveEdit(f){
   if(!amount){ showErr("#e-err","Isi nominal."); return; }
   if(!desc){ showErr("#e-err","Isi keterangan transaksi."); return; }
   if(!date){ showErr("#e-err","Isi tanggal."); return; }
+  if(!party){ showErr("#e-err",type==="in"?"Isi nama pihak yang menyerahkan uang (Diterima dari).":"Isi nama penerima uang (Dibayar kepada)."); return; }
   showErr("#e-err","");
   const renumber = type!==t.type || bid!==t.branchId || ymKey(date)!==ymKey(t.date);
   let no=t.no;

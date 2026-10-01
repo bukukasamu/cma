@@ -489,3 +489,5 @@ body.is-auth .netbar{top:0}
 .search input{font-size:1rem}
 .remind{background:var(--warn-bg);border:1px solid #f1d48f;color:#5a3d00;border-radius:12px;padding:10px 14px;font-size:.88rem}
 .acct-sec{display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--soft-2)}
+
+.req{color:var(--out);font-size:.72rem;font-weight:800}
