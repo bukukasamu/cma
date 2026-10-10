@@ -1,52 +1,122 @@
-// Service worker Kas AMU: menyimpan tampilan aplikasi agar cepat dibuka dan bisa dipasang.
-// Data kas tetap diambil langsung dari Firebase. Naikkan VERSION setiap kali merilis versi baru.
-const VERSION = "kas-amu-4.1.0";
-const SHELL = [
-  "./", "./index.html", "./app.js", "./style.css", "./firebase-config.js", "./manifest.json", "./logo.jpg",
-  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png", "./icons/apple-touch-icon.png"
+// Service worker PWA Aceh Mandiri Utama.
+// - File aplikasi (HTML/CSS/JS) diambil dari internet dulu supaya versi baru langsung terpakai; bila sinyal putus
+//   atau lambat (> 4 detik) dipakai salinan terakhir, jadi aplikasi tetap terbuka.
+// - Pustaka dari CDN (Firebase, PDF, Excel, QR, font) bernomor versi tetap, jadi disimpan sekali lalu dipakai ulang.
+// - Data Firestore & login TIDAK lewat sini (ditangani Firebase sendiri).
+// Ganti VERSI setiap ada update besar supaya salinan lama dibersihkan.
+const VERSI = 'amu-4.4.0';
+const INTI = [
+  './',
+  'index.html',
+  'pos.html',
+  'layar.html',
+  'absen.html',
+  'style.css',
+  'manifest.webmanifest',
+  'cek.webmanifest',
+  'layar.webmanifest',
+  'icons/icon-192.png',
+  'icons/icon-512.png',
+  'icons/apple-touch-icon.png',
+  'icons/favicon-48.png',
+  '404.html',
+  'wilayah/index.json',
+  'wilayah/11.json',
+  'js/absen-layar.js',
+  'js/absensi.js',
+  'js/akun.js',
+  'js/angka.js',
+  'js/antrian.js',
+  'js/backup.js',
+  'js/bayar.js',
+  'js/beranda.js',
+  'js/brand.js',
+  'js/cabang.js',
+  'js/cari-kendaraan.js',
+  'js/cari-pilihan.js',
+  'js/cek.js',
+  'js/config.js',
+  'js/data-trx.js',
+  'js/excel-parser.js',
+  'js/firebase-config.js',
+  'js/firebase.js',
+  'js/hapus-semua.js',
+  'js/import-excel.js',
+  'js/insight.js',
+  'js/kasir.js',
+  'js/keuangan.js',
+  'js/konsumen-pdf.js',
+  'js/kontrol.js',
+  'js/laporan-pdf.js',
+  'js/laporan.js',
+  'js/layar.js',
+  'js/log-konsumen.js',
+  'js/main.js',
+  'js/master.js',
+  'js/mekanik.js',
+  'js/migrasi.js',
+  'js/nota-pdf.js',
+  'js/nota.js',
+  'js/numbering.js',
+  'js/opname.js',
+  'js/order.js',
+  'js/otorisasi.js',
+  'js/payment.js',
+  'js/pembelian.js',
+  'js/penghasilan.js',
+  'js/persetujuan.js',
+  'js/pwa.js',
+  'js/qr.js',
+  'js/registrasi.js',
+  'js/riwayat-ui.js',
+  'js/riwayat.js',
+  'js/seed.js',
+  'js/slip-pdf.js',
+  'js/state.js',
+  'js/stats.js',
+  'js/stok.js',
+  'js/util.js',
+  'js/wilayah.js',
+  'js/wo-common.js'
 ];
-const CDN = ["www.gstatic.com", "cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com"];
+const CDN = ['www.gstatic.com', 'cdnjs.cloudflare.com', 'cdn.sheetjs.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
-self.addEventListener("install", e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)));
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(VERSI).then(c => Promise.all(INTI.map(u => c.add(new Request(u, { cache: 'reload' })).catch(() => null)))).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSI).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
-self.addEventListener("activate", e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener("message", e => { if (e.data === "skip") self.skipWaiting(); });
-
-self.addEventListener("fetch", e => {
-  const req = e.request;
-  if (req.method !== "GET") return;
+// Alamat pendek (www.amuservice.id/pos, /layar) saat offline diarahkan ke file halamannya; lainnya ke cek servis
+function halamanUntuk(url) {
+  const akhir = new URL(url).pathname.replace(/\/+$/, '').split('/').pop().toLowerCase();
+  return { pos: 'pos.html', 'pos.html': 'pos.html', petugas: 'pos.html', layar: 'layar.html', 'layar.html': 'layar.html', tv: 'layar.html', antrian: 'layar.html' }[akhir] || 'index.html';
+}
+function jaringanDulu(req) {
+  return new Promise(resolve => {
+    let selesai = false;
+    const dariCache = () => caches.match(req, { ignoreSearch: req.mode === 'navigate' }).then(r => r || (req.mode === 'navigate' ? caches.match(halamanUntuk(req.url)) : null));
+    const t = setTimeout(() => dariCache().then(r => { if (r && !selesai) { selesai = true; resolve(r); } }), 4000);
+    fetch(req).then(res => {
+      clearTimeout(t);
+      if (res && res.ok) { const salin = res.clone(); caches.open(VERSI).then(c => c.put(req, salin)); }
+      if (!selesai) { selesai = true; resolve(res); }
+    }).catch(() => {
+      clearTimeout(t);
+      dariCache().then(r => { if (!selesai) { selesai = true; resolve(r || new Response('Tidak ada koneksi internet', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })); } });
+    });
+  });
+}
+function cacheDulu(req) {
+  return caches.match(req).then(r => r || fetch(req).then(res => {
+    if (res && (res.ok || res.type === 'opaque')) { const salin = res.clone(); caches.open(VERSI).then(c => c.put(req, salin)); }
+    return res;
+  }));
+}
+self.addEventListener('fetch', e => {
+  const req = e.request; if (req.method !== 'GET') return;
   const url = new URL(req.url);
-
-  // File aplikasi sendiri: ambil versi terbaru dulu, pakai cadangan saat offline
-  if (url.origin === self.location.origin) {
-    e.respondWith(
-      fetch(req).then(res => {
-        if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
-        return res;
-      }).catch(() => caches.match(req).then(m => m || caches.match("./index.html")))
-    );
-    return;
-  }
-
-  // Pustaka dari CDN: pakai simpanan, perbarui di belakang
-  if (CDN.includes(url.hostname)) {
-    e.respondWith(
-      caches.match(req).then(cached => {
-        const net = fetch(req).then(res => {
-          if (res.ok || res.type === "opaque") { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
-          return res;
-        }).catch(() => cached);
-        return cached || net;
-      })
-    );
-  }
+  if (url.origin === self.location.origin) { e.respondWith(jaringanDulu(req)); return; }
+  if (CDN.includes(url.hostname)) e.respondWith(cacheDulu(req));
 });
